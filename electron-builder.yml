@@ -1,0 +1,26 @@
+appId: com.flowcore.my-tasks-plan
+productName: My Tasks Plan
+directories:
+  buildResources: resources
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.*'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+asarUnpack:
+  - node_modules/better-sqlite3/**
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSDocumentsFolderUsageDescription: Application needs access for task data.
+  notarize: false
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+npmRebuild: true
+publish:
+  provider: generic
+  url: ''

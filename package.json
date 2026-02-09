@@ -1,0 +1,43 @@
+{
+  "name": "my-tasks-plan",
+  "version": "1.0.0",
+  "description": "Desktop Task Manager with Electron",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview"
+  },
+  "dependencies": {
+    "@hello-pangea/dnd": "^17.0.0",
+    "@tanstack/react-query": "^5.62.0",
+    "@tiptap/extension-placeholder": "^3.18.0",
+    "@tiptap/react": "^3.18.0",
+    "@tiptap/starter-kit": "^3.18.0",
+    "@xyflow/react": "^12.4.0",
+    "dagre": "^0.8.5",
+    "framer-motion": "^12.30.0",
+    "lucide-react": "^0.563.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/dagre": "^0.7.52",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "electron": "32.2.7",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.0.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0"
+  },
+  "resolutions": {
+    "vite": "^6.0.0"
+  }
+}
