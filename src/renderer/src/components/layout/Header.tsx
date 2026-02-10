@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
-import { Plus, ChevronDown, X, FolderOpen } from 'lucide-react'
+import { Plus, ChevronDown, X, FolderOpen, Users } from 'lucide-react'
+import type { WorkspaceMember } from '../../../../shared/types'
 
 interface HeaderProps {
   onNewTask: () => void
@@ -13,6 +14,10 @@ interface HeaderProps {
   selectedProjects: string[]
   onToggleProject: (project: string) => void
   onClearProjects: () => void
+  members?: WorkspaceMember[]
+  selectedAssignees: string[]
+  onToggleAssignee: (userId: string) => void
+  onClearAssignees: () => void
 }
 
 export function Header({
@@ -25,14 +30,23 @@ export function Header({
   selectedProjects,
   onToggleProject,
   onClearProjects,
+  members,
+  selectedAssignees,
+  onToggleAssignee,
+  onClearAssignees,
 }: HeaderProps) {
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false)
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const assigneeDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setProjectDropdownOpen(false)
+      }
+      if (assigneeDropdownRef.current && !assigneeDropdownRef.current.contains(e.target as Node)) {
+        setAssigneeDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -143,6 +157,86 @@ export function Header({
                 </button>
               </span>
             ))}
+          </div>
+        )}
+
+        {/* Assignee filter dropdown */}
+        <div ref={assigneeDropdownRef} className="relative">
+          <button
+            onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+          >
+            <Users size={14} className="text-gray-400" />
+            {selectedAssignees.length === 0 ? (
+              <span>All Assignees</span>
+            ) : (
+              <span>{selectedAssignees.length} assignee{selectedAssignees.length !== 1 ? 's' : ''}</span>
+            )}
+            <ChevronDown size={14} className="text-gray-400" />
+          </button>
+
+          {selectedAssignees.length > 0 && (
+            <button
+              onClick={onClearAssignees}
+              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-gray-400 dark:bg-gray-500 text-white flex items-center justify-center hover:bg-gray-500 dark:hover:bg-gray-400"
+            >
+              <X size={10} />
+            </button>
+          )}
+
+          {assigneeDropdownOpen && (
+            <div className="absolute z-20 left-0 mt-1 w-56 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 shadow-lg py-1">
+              {!members || members.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500">No members found.</p>
+              ) : (
+                <>
+                  {members.map(member => (
+                    <label
+                      key={member.userId}
+                      className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedAssignees.includes(member.userId)}
+                        onChange={() => onToggleAssignee(member.userId)}
+                        className="rounded border-gray-300 dark:border-gray-500 text-primary-600 focus:ring-primary-500"
+                      />
+                      {member.name}
+                    </label>
+                  ))}
+                  {selectedAssignees.length > 0 && (
+                    <div className="border-t border-gray-200 dark:border-gray-600 mt-1 pt-1">
+                      <button
+                        onClick={onClearAssignees}
+                        className="w-full text-left px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600"
+                      >
+                        Clear filter
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Selected assignee chips */}
+        {selectedAssignees.length > 0 && members && (
+          <div className="flex items-center gap-1 ml-1">
+            {selectedAssignees.map(uid => {
+              const m = members.find(x => x.userId === uid)
+              return (
+                <span
+                  key={uid}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs font-medium"
+                >
+                  {m?.name || uid}
+                  <button onClick={() => onToggleAssignee(uid)} className="hover:text-blue-900 dark:hover:text-blue-200">
+                    <X size={10} />
+                  </button>
+                </span>
+              )
+            })}
           </div>
         )}
       </div>

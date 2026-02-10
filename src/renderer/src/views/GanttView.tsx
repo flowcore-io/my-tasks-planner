@@ -1,4 +1,5 @@
 import { useTasks, useUpdateTask } from '@/hooks/use-tasks'
+import { useMembers, resolveMemberName } from '@/hooks/use-members'
 import { getScheduleHealth, cn } from '@/lib/utils'
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { ChevronRight, ChevronDown, AlertTriangle, Clock, Calendar, MoreVertical, X } from 'lucide-react'
@@ -44,6 +45,7 @@ function CompactStatus({ status }: { status: string }) {
 interface GanttViewProps {
   onTaskClick: (task: TaskWithTags) => void
   projectFilter?: string[]
+  assigneeFilter?: string[]
 }
 
 type ColumnType = 'day' | 'week' | 'month'
@@ -177,8 +179,9 @@ function groupByProject(tasks: TaskWithTags[]): ProjectGroup[] {
     .map(([name, { scheduled, unscheduled }]) => ({ name, scheduled, unscheduled }))
 }
 
-export function GanttView({ onTaskClick, projectFilter }: GanttViewProps) {
+export function GanttView({ onTaskClick, projectFilter, assigneeFilter }: GanttViewProps) {
   const { data: rawTasks, isLoading } = useTasks()
+  const { data: members } = useMembers()
   const [horizon, setHorizon] = useState<Horizon>('6m')
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [collapsedUnscheduled, setCollapsedUnscheduled] = useState<Set<string>>(new Set(['__all__']))
@@ -222,8 +225,11 @@ export function GanttView({ onTaskClick, projectFilter }: GanttViewProps) {
     if (projectFilter && projectFilter.length > 0) {
       filtered = filtered.filter(t => t.projects.some(p => projectFilter.includes(p)))
     }
+    if (assigneeFilter && assigneeFilter.length > 0) {
+      filtered = filtered.filter(t => t.assigneeId && assigneeFilter.includes(t.assigneeId))
+    }
     return filtered
-  }, [rawTasks, projectFilter])
+  }, [rawTasks, projectFilter, assigneeFilter])
 
   const groups = useMemo(() => groupByProject(tasks), [tasks])
 
@@ -558,6 +564,10 @@ export function GanttView({ onTaskClick, projectFilter }: GanttViewProps) {
         const health = getScheduleHealth(task)
 
         // Label row
+        const assigneeName = resolveMemberName(members, task.assigneeId)
+        const assigneeInitials = task.assigneeId && assigneeName !== 'Unassigned' && assigneeName !== 'Loading...' && assigneeName !== 'Unknown'
+          ? assigneeName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+          : null
         labelRows.push(
           <div
             key={`lbl-${group.name}-${task.id}`}
@@ -566,7 +576,15 @@ export function GanttView({ onTaskClick, projectFilter }: GanttViewProps) {
             onClick={() => onTaskClick(task)}
           >
             <CompactStatus status={task.status} />
-            <span className="truncate text-gray-700 dark:text-gray-300 text-xs">{task.title}</span>
+            <span className="truncate text-gray-700 dark:text-gray-300 text-xs flex-1">{task.title}</span>
+            {assigneeInitials && (
+              <span
+                title={assigneeName}
+                className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center text-[9px] font-bold shrink-0"
+              >
+                {assigneeInitials}
+              </span>
+            )}
           </div>
         )
 

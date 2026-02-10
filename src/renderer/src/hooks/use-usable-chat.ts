@@ -87,8 +87,14 @@ export function useUsableChat(
   }, [])
 
   const setCssVariables = useCallback((variables: Record<string, string>) => {
+    console.debug('[useUsableChat] setCssVariables:', Object.keys(variables).length, 'vars', embedRef.current ? '(embed exists)' : '(no embed)')
     embedRef.current?.setCssVariables(variables)
   }, [])
 
-  return { isReady, conversationId, addContext, setAuth, setCssVariables, embed: embedRef.current }
+  const setConfig = useCallback((config: unknown) => {
+    console.debug('[useUsableChat] setConfig:', config, embedRef.current ? '(embed exists)' : '(no embed)')
+    embedRef.current?.setConfig(config)
+  }, [])
+
+  return { isReady, conversationId, addContext, setAuth, setCssVariables, setConfig, embed: embedRef.current }
 }

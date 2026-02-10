@@ -96,6 +96,7 @@ export function registerTaskHandlers(): void {
           dependencies: [],
           startDate: data.startDate,
           endDate: data.endDate,
+          assigneeId: data.assigneeId,
         })
 
         const result = await createFragment({
@@ -124,6 +125,7 @@ export function registerTaskHandlers(): void {
           comments: [],
           startDate: data.startDate,
           endDate: data.endDate,
+          assigneeId: data.assigneeId,
         }
 
         return { success: true, data: created }
@@ -168,6 +170,7 @@ export function registerTaskHandlers(): void {
         comments: data.comments ?? current.comments,
         startDate: data.startDate === null ? undefined : (data.startDate ?? current.startDate),
         endDate: data.endDate === null ? undefined : (data.endDate ?? current.endDate),
+        assigneeId: data.assigneeId === null ? undefined : (data.assigneeId ?? current.assigneeId),
       }
 
       const payload = taskToFragmentPayload(merged)
@@ -204,6 +207,7 @@ export function registerTaskHandlers(): void {
         comments: current.comments,
         startDate: current.startDate,
         endDate: current.endDate,
+        assigneeId: current.assigneeId,
       })
 
       await updateFragment(id, {
@@ -240,6 +244,7 @@ export function registerTaskHandlers(): void {
           comments: current.comments,
           startDate: current.startDate,
           endDate: current.endDate,
+          assigneeId: current.assigneeId,
         }
 
         const payload = taskToFragmentPayload(merged)
@@ -270,6 +275,7 @@ export function registerTaskHandlers(): void {
         text,
         author,
         authorEmail,
+        authorId: claims?.sub,
         createdAt: now,
       }
 
@@ -287,6 +293,7 @@ export function registerTaskHandlers(): void {
         comments: [...current.comments, newComment],
         startDate: current.startDate,
         endDate: current.endDate,
+        assigneeId: current.assigneeId,
       }
 
       const payload = taskToFragmentPayload(merged)

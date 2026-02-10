@@ -10,15 +10,20 @@ import usableMascot from '@/assets/usable-mascot.png'
 interface KanbanViewProps {
   onTaskClick: (task: TaskWithTags) => void
   projectFilter?: string[]
+  assigneeFilter?: string[]
 }
 
-export function KanbanView({ onTaskClick, projectFilter }: KanbanViewProps) {
+export function KanbanView({ onTaskClick, projectFilter, assigneeFilter }: KanbanViewProps) {
   const { data: rawTasks, isLoading } = useTasks()
 
-  // Client-side project filter
-  const tasks = rawTasks && projectFilter && projectFilter.length > 0
-    ? rawTasks.filter(t => t.projects.some(p => projectFilter.includes(p)))
-    : rawTasks
+  // Client-side project + assignee filter
+  let tasks = rawTasks
+  if (tasks && projectFilter && projectFilter.length > 0) {
+    tasks = tasks.filter(t => t.projects.some(p => projectFilter.includes(p)))
+  }
+  if (tasks && assigneeFilter && assigneeFilter.length > 0) {
+    tasks = tasks.filter(t => t.assigneeId && assigneeFilter.includes(t.assigneeId))
+  }
   const reorder = useReorderTasks()
   const { toast } = useToast()
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set())

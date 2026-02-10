@@ -12,6 +12,15 @@ let bubbleWindow: BrowserWindow | null = null
 let appWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 
+const appIcon = nativeImage.createFromPath(join(__dirname, '../../resources/icon.png'))
+
+/** Keep macOS dock icon visible — the app is always alive (tray + bubble) */
+function ensureDockVisible(): void {
+  if (process.platform === 'darwin' && app.dock && !app.dock.isVisible()) {
+    app.dock.show()
+  }
+}
+
 function createBubbleWindow(): void {
   const primaryDisplay = screen.getPrimaryDisplay()
   const { width, height } = primaryDisplay.workAreaSize
@@ -87,6 +96,7 @@ function createAppWindow(): void {
     minWidth: 1000,
     minHeight: 600,
     show: false,
+    icon: appIcon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -113,6 +123,7 @@ function createAppWindow(): void {
 
   appWindow.on('closed', () => {
     appWindow = null
+    ensureDockVisible()
   })
 }
 
@@ -160,6 +171,16 @@ function createTray(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.flowcore.my-tasks-plan')
+
+  // Set dock icon on macOS and keep it visible at all times.
+  // macOS auto-hides the dock icon when no "normal" windows exist — the bubble
+  // window is transparent + skipTaskbar, so we must force the dock to stay.
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(appIcon)
+    app.dock.show()
+    // Poll to catch any system-initiated hide (window close, Mission Control, etc.)
+    setInterval(ensureDockVisible, 2000)
+  }
 
   // Set up application menu so macOS shows the correct app name and menus
   const isMac = process.platform === 'darwin'
@@ -259,6 +280,32 @@ app.whenReady().then(() => {
     return { success: true }
   })
 
+  // Inject CSS into the chat embed iframe (cross-origin) via WebFrameMain
+  ipcMain.handle(IPC_CHANNELS.CHAT_INJECT_THEME_CSS, (event, css: string) => {
+    try {
+      const frames = event.sender.mainFrame.framesInSubtree
+      const chatFrame = frames.find(f => f !== event.sender.mainFrame && f.url.includes('/embed'))
+      if (!chatFrame) {
+        return { success: false, error: 'Chat frame not found' }
+      }
+      chatFrame.executeJavaScript(`
+        (() => {
+          let el = document.getElementById('app-theme-override');
+          if (!el) {
+            el = document.createElement('style');
+            el.id = 'app-theme-override';
+            document.head.appendChild(el);
+          }
+          el.textContent = ${JSON.stringify(css)};
+        })()
+      `)
+      return { success: true }
+    } catch (err) {
+      console.error('[chat:inject-theme-css] Error:', err)
+      return { success: false, error: String(err) }
+    }
+  })
+
   // Restore persisted auth session, then run migrations
   initAuth().then(async (restored) => {
     if (restored) {
@@ -293,13 +340,19 @@ app.whenReady().then(() => {
   })
 
   app.on('activate', function () {
-    if (!bubbleWindow || bubbleWindow.isDestroyed()) createBubbleWindow()
-    else bubbleWindow.show()
+    if (getChatConfig().chatMode === 'docked') {
+      createAppWindow()
+    } else {
+      if (!bubbleWindow || bubbleWindow.isDestroyed()) createBubbleWindow()
+      else bubbleWindow.show()
+    }
+    ensureDockVisible()
   })
 })
 
 app.on('window-all-closed', () => {
   // No-op: keep app alive for the bubble overlay and tray icon
+  ensureDockVisible()
 })
 
 app.on('before-quit', () => {

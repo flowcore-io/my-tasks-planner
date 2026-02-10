@@ -3,7 +3,7 @@ import { ThemeToggle } from './ThemeToggle'
 import { Button } from '@/components/ui/Button'
 import { useConnectionStatus, useWorkspaceConfig } from '@/hooks/use-usable'
 import { useState, useEffect, useCallback } from 'react'
-import { List, Columns3, GitBranch, GanttChart, FolderOpen, LogIn, LogOut, Settings, MessageCircle } from 'lucide-react'
+import { List, Columns3, GitBranch, GanttChart, FolderOpen, Users, LogIn, LogOut, Settings, MessageCircle } from 'lucide-react'
 import type { ChatMode } from '../../../../shared/types'
 import type { ReactNode } from 'react'
 import usableLogo from '@/assets/usable-logo-transparent.png'
@@ -26,6 +26,7 @@ const NAV_ITEMS: { id: string; label: string; icon: ReactNode }[] = [
 
 const SECONDARY_NAV: { id: string; label: string; icon: ReactNode }[] = [
   { id: 'projects', label: 'Projects', icon: <FolderOpen size={16} /> },
+  { id: 'members', label: 'Members', icon: <Users size={16} /> },
 ]
 
 export function Sidebar({ currentView, onViewChange, onOpenSettings, chatMode, dockedChatOpen, onToggleDockedChat }: SidebarProps) {
@@ -120,23 +121,6 @@ export function Sidebar({ currentView, onViewChange, onOpenSettings, chatMode, d
           </button>
         ))}
 
-        {chatMode === 'docked' && onToggleDockedChat && (
-          <>
-            <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
-            <button
-              onClick={onToggleDockedChat}
-              className={cn(
-                'w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
-                dockedChatOpen
-                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              )}
-            >
-              <MessageCircle size={16} />
-              Chat
-            </button>
-          </>
-        )}
       </nav>
 
       <div className="p-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
@@ -146,14 +130,30 @@ export function Sidebar({ currentView, onViewChange, onOpenSettings, chatMode, d
           <span className="text-xs text-gray-600 dark:text-gray-300 truncate flex-1">
             {connectionStatus.label}
           </span>
-          {isLoggedIn && onOpenSettings && (
-            <button
-              onClick={onOpenSettings}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shrink-0"
-            >
-              <Settings size={14} />
-            </button>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            {chatMode === 'docked' && onToggleDockedChat && (
+              <button
+                onClick={onToggleDockedChat}
+                className={cn(
+                  'p-1 rounded transition-colors',
+                  dockedChatOpen
+                    ? 'text-primary-600 dark:text-primary-400'
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                )}
+                title={dockedChatOpen ? 'Close chat' : 'Open chat'}
+              >
+                <MessageCircle size={14} />
+              </button>
+            )}
+            {isLoggedIn && onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <Settings size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">

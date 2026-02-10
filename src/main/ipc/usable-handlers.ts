@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { listWorkspaces, getFragmentTypes, checkConnection } from '../usable-api'
 import { getWorkspaceConfig, setWorkspaceConfig, clearWorkspaceConfig } from '../workspace-config'
+import { getCachedMembers } from '../member-cache'
 import type { IpcResponse, WorkspaceConfig } from '../../shared/types'
 
 export function registerUsableHandlers(): void {
@@ -53,6 +54,17 @@ export function registerUsableHandlers(): void {
       clearWorkspaceConfig()
     }
     return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.USABLE_LIST_MEMBERS, async (): Promise<IpcResponse> => {
+    try {
+      const config = getWorkspaceConfig()
+      if (!config) return { success: false, error: 'No workspace configured' }
+      const members = await getCachedMembers(config.workspaceId)
+      return { success: true, data: members }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
   })
 
   ipcMain.handle(IPC_CHANNELS.USABLE_CHECK_CONNECTION, async (): Promise<IpcResponse<boolean>> => {

@@ -4,6 +4,7 @@ import { PriorityBadge } from '@/components/tasks/PriorityBadge'
 import { TaskActions } from '@/components/tasks/TaskActions'
 import { formatDate, STATUS_LABELS } from '@/lib/utils'
 import { useProjects } from '@/hooks/use-projects'
+import { useMembers, resolveMemberName } from '@/hooks/use-members'
 import { useState } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
 import usableMascot from '@/assets/usable-mascot.png'
@@ -14,17 +15,22 @@ interface ListViewProps {
   filters?: { status?: string; priority?: string }
   onTaskClick: (task: TaskWithTags) => void
   projectFilter?: string[]
+  assigneeFilter?: string[]
 }
 
-type SortKey = 'title' | 'status' | 'priority' | 'createdAt' | 'updatedAt'
+type SortKey = 'title' | 'status' | 'priority' | 'assignee' | 'createdAt' | 'updatedAt'
 
-export function ListView({ filters, onTaskClick, projectFilter }: ListViewProps) {
+export function ListView({ filters, onTaskClick, projectFilter, assigneeFilter }: ListViewProps) {
   const { data: rawTasks, isLoading } = useTasks(filters)
 
-  // Client-side project filter
-  const tasks = rawTasks && projectFilter && projectFilter.length > 0
-    ? rawTasks.filter(t => t.projects.some(p => projectFilter.includes(p)))
-    : rawTasks
+  // Client-side project + assignee filter
+  let tasks = rawTasks
+  if (tasks && projectFilter && projectFilter.length > 0) {
+    tasks = tasks.filter(t => t.projects.some(p => projectFilter.includes(p)))
+  }
+  if (tasks && assigneeFilter && assigneeFilter.length > 0) {
+    tasks = tasks.filter(t => t.assigneeId && assigneeFilter.includes(t.assigneeId))
+  }
   const [sortKey, setSortKey] = useState<SortKey>('createdAt')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -32,6 +38,7 @@ export function ListView({ filters, onTaskClick, projectFilter }: ListViewProps)
   const bulkStatus = useBulkUpdateStatus()
   const bulkAddProject = useBulkAddToProject()
   const projects = useProjects()
+  const { data: members } = useMembers()
   const { toast } = useToast()
 
   const handleSort = (key: SortKey) => {
@@ -51,6 +58,7 @@ export function ListView({ filters, onTaskClick, projectFilter }: ListViewProps)
       const order = { urgent: 0, high: 1, medium: 2, low: 3 }
       cmp = (order[a.priority] ?? 2) - (order[b.priority] ?? 2)
     }
+    else if (sortKey === 'assignee') cmp = resolveMemberName(members, a.assigneeId).localeCompare(resolveMemberName(members, b.assigneeId))
     else if (sortKey === 'createdAt') cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     else if (sortKey === 'updatedAt') cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()
     return sortDir === 'asc' ? cmp : -cmp
@@ -201,6 +209,7 @@ export function ListView({ filters, onTaskClick, projectFilter }: ListViewProps)
               <SortHeader label="Title" field="title" />
               <SortHeader label="Status" field="status" />
               <SortHeader label="Priority" field="priority" />
+              <SortHeader label="Assignee" field="assignee" />
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tags</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Projects</th>
               <SortHeader label="Created" field="createdAt" />
@@ -231,6 +240,11 @@ export function ListView({ filters, onTaskClick, projectFilter }: ListViewProps)
                 </td>
                 <td className="px-4 py-3"><StatusBadge status={task.status} /></td>
                 <td className="px-4 py-3"><PriorityBadge priority={task.priority} /></td>
+                <td className="px-4 py-3">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    {resolveMemberName(members, task.assigneeId)}
+                  </span>
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
                     {[...new Set(task.tags)].map(tag => (

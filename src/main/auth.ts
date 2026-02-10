@@ -294,12 +294,12 @@ export function getToken(): string | null {
   return accessToken
 }
 
-export function getTokenClaims(): { name?: string; email?: string } | null {
+export function getTokenClaims(): { name?: string; email?: string; sub?: string } | null {
   if (!accessToken) return null
   try {
     const payload = accessToken.split('.')[1]
     const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString())
-    return { name: decoded.name || decoded.preferred_username, email: decoded.email }
+    return { name: decoded.name || decoded.preferred_username, email: decoded.email, sub: decoded.sub }
   } catch {
     return null
   }

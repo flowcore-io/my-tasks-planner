@@ -22,11 +22,12 @@ import ELK from 'elkjs/lib/elk.bundled.js'
 import { useGraph, useAddDependency, useRemoveDependency } from '@/hooks/use-dependencies'
 import { useBulkDeleteTasks, useBulkUpdateStatus, useBulkAddToProject } from '@/hooks/use-tasks'
 import { useProjects } from '@/hooks/use-projects'
+import { useMembers, resolveMemberName } from '@/hooks/use-members'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { ArrowDown, ArrowRight, Play, Filter, MousePointer2, Trash2, Loader2, ArrowLeftRight, ChevronUp } from 'lucide-react'
 import { STATUS_LABELS } from '@/lib/utils'
-import type { TaskWithTags } from '../../../shared/types'
+import type { TaskWithTags, WorkspaceMember } from '../../../shared/types'
 import usableMascot from '@/assets/usable-mascot.png'
 
 const STATUS_ACCENT: Record<string, string> = {
@@ -73,11 +74,15 @@ function PriorityChevrons({ priority }: { priority: string }) {
   )
 }
 
-function TaskNode({ data }: { data: { task: TaskWithTags; direction: 'TB' | 'LR'; isRoot: boolean; isDimmed: boolean; isSelected: boolean } }) {
+function TaskNode({ data }: { data: { task: TaskWithTags; direction: 'TB' | 'LR'; isRoot: boolean; isDimmed: boolean; isSelected: boolean; members?: WorkspaceMember[] } }) {
   const accent = STATUS_ACCENT[data.task.status] || STATUS_ACCENT.todo
   const statusLabel = STATUS_LABEL[data.task.status] || data.task.status
   const targetPos = data.direction === 'TB' ? Position.Top : Position.Left
   const sourcePos = data.direction === 'TB' ? Position.Bottom : Position.Right
+  const assigneeName = resolveMemberName(data.members, data.task.assigneeId)
+  const assigneeInitials = data.task.assigneeId && assigneeName !== 'Unassigned' && assigneeName !== 'Loading...' && assigneeName !== 'Unknown'
+    ? assigneeName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+    : null
 
   return (
     <div
@@ -97,7 +102,17 @@ function TaskNode({ data }: { data: { task: TaskWithTags; direction: 'TB' | 'LR'
         <div className="text-[13px] font-semibold truncate text-gray-900 dark:text-gray-100 flex-1">{data.task.title}</div>
         <PriorityChevrons priority={data.task.priority} />
       </div>
-      <div className="text-[11px] mt-1 text-gray-500 dark:text-gray-400">{statusLabel}</div>
+      <div className="flex items-center gap-2 mt-1">
+        <div className="text-[11px] text-gray-500 dark:text-gray-400 flex-1">{statusLabel}</div>
+        {assigneeInitials && (
+          <span
+            title={assigneeName}
+            className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center text-[9px] font-bold shrink-0"
+          >
+            {assigneeInitials}
+          </span>
+        )}
+      </div>
     </div>
   )
 }
@@ -151,10 +166,12 @@ async function getLayoutedElements(nodes: Node[], edges: Edge[], direction: 'TB'
 interface DependencyGraphViewProps {
   onTaskClick: (task: TaskWithTags) => void
   projectFilter?: string[]
+  assigneeFilter?: string[]
 }
 
-export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGraphViewProps) {
+export function DependencyGraphView({ onTaskClick, projectFilter, assigneeFilter }: DependencyGraphViewProps) {
   const { data: graph, isLoading } = useGraph()
+  const { data: members } = useMembers()
   const [direction, setDirection] = useState<'TB' | 'LR'>('TB')
   const [showAvailableOnly, setShowAvailableOnly] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
@@ -217,11 +234,12 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
   }, [selectedIds, bulkAddProject, toast])
 
   const hasProjectFilter = projectFilter && projectFilter.length > 0
+  const hasAssigneeFilter = assigneeFilter && assigneeFilter.length > 0
 
   const [computedLayout, setComputedLayout] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] })
 
   const orphanCount = useMemo(() => {
-    if (!graph || hasProjectFilter || showAvailableOnly) return 0
+    if (!graph || hasProjectFilter || hasAssigneeFilter || showAvailableOnly) return 0
 
     let filteredNodes = graph.nodes.filter(t => t.status !== 'archived')
     const filteredNodeIds = new Set(filteredNodes.map(t => t.id))
@@ -235,7 +253,7 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
       connectedIds.add(edge.dependsOnId)
     })
     return filteredNodes.filter(t => !connectedIds.has(t.id)).length
-  }, [graph, hasProjectFilter, showAvailableOnly])
+  }, [graph, hasProjectFilter, hasAssigneeFilter, showAvailableOnly])
 
   useEffect(() => {
     if (!graph) {
@@ -243,11 +261,16 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
       return
     }
 
-    // Exclude archived tasks, then apply project filter
+    // Exclude archived tasks, then apply project + assignee filters
     let filteredNodes = graph.nodes.filter(t => t.status !== 'archived')
     if (hasProjectFilter) {
       filteredNodes = filteredNodes.filter(t =>
         t.projects.some(p => projectFilter!.includes(p))
+      )
+    }
+    if (hasAssigneeFilter) {
+      filteredNodes = filteredNodes.filter(t =>
+        t.assigneeId && assigneeFilter!.includes(t.assigneeId)
       )
     }
 
@@ -318,7 +341,7 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
     // When no project filter, only show connected tasks (current behavior)
     let tasksToRender: TaskWithTags[]
 
-    if (hasProjectFilter || showAvailableOnly) {
+    if (hasProjectFilter || hasAssigneeFilter || showAvailableOnly) {
       tasksToRender = visibleTasks
     } else {
       const connectedIds = new Set<string>()
@@ -332,7 +355,7 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
     const nodes: Node[] = tasksToRender.map(task => ({
       id: task.id,
       type: 'task',
-      data: { task, direction, isRoot: rootIds.has(task.id), isDimmed: dimmedIds.has(task.id), isSelected: false },
+      data: { task, direction, isRoot: rootIds.has(task.id), isDimmed: dimmedIds.has(task.id), isSelected: false, members },
       position: { x: 0, y: 0 },
       selectable: true,
     }))
@@ -357,7 +380,7 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
     })
 
     return () => { cancelled = true }
-  }, [graph, direction, hasProjectFilter, projectFilter, showAvailableOnly])
+  }, [graph, direction, hasProjectFilter, projectFilter, hasAssigneeFilter, assigneeFilter, showAvailableOnly, members])
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     if (selectMode) return // In select mode, clicking toggles selection (handled by ReactFlow)

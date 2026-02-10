@@ -1,6 +1,7 @@
 import { StatusBadge } from './StatusBadge'
 import { PriorityBadge } from './PriorityBadge'
 import { TaskActions } from './TaskActions'
+import { useMembers, resolveMemberName } from '@/hooks/use-members'
 import type { TaskWithTags } from '../../../../shared/types'
 
 interface TaskCardProps {
@@ -11,6 +12,12 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, onClick, compact, saving }: TaskCardProps) {
+  const { data: members } = useMembers()
+  const assigneeName = resolveMemberName(members, task.assigneeId)
+  const initials = task.assigneeId && assigneeName !== 'Unassigned' && assigneeName !== 'Loading...' && assigneeName !== 'Unknown'
+    ? assigneeName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+    : null
+
   return (
     <div
       onClick={onClick}
@@ -36,6 +43,14 @@ export function TaskCard({ task, onClick, compact, saving }: TaskCardProps) {
             {tag}
           </span>
         ))}
+        {initials && (
+          <span
+            title={assigneeName}
+            className="ml-auto w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center text-[10px] font-bold shrink-0"
+          >
+            {initials}
+          </span>
+        )}
       </div>
     </div>
   )

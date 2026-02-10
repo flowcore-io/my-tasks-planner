@@ -6,6 +6,7 @@ import { Dialog } from '@/components/ui/Dialog'
 import { useCreateTask, useUpdateTask } from '@/hooks/use-tasks'
 import { useTags } from '@/hooks/use-tags'
 import { useProjects } from '@/hooks/use-projects'
+import { useMembers } from '@/hooks/use-members'
 import { X } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import type { TaskWithTags } from '../../../../shared/types'
@@ -27,6 +28,7 @@ export function TaskForm({ open, onClose, task }: TaskFormProps) {
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [assigneeId, setAssigneeId] = useState('')
   const [taskProjects, setTaskProjects] = useState<string[]>([])
   const [projectInput, setProjectInput] = useState('')
   const [showProjectSuggestions, setShowProjectSuggestions] = useState(false)
@@ -38,6 +40,7 @@ export function TaskForm({ open, onClose, task }: TaskFormProps) {
   const updateTask = useUpdateTask()
   const { data: allTags } = useTags()
   const allProjects = useProjects()
+  const { data: members } = useMembers()
   const { toast } = useToast()
 
   useEffect(() => {
@@ -48,6 +51,7 @@ export function TaskForm({ open, onClose, task }: TaskFormProps) {
       setPriority(task?.priority || 'medium')
       setStartDate(task?.startDate || '')
       setEndDate(task?.endDate || '')
+      setAssigneeId(task?.assigneeId || '')
       setTaskTags(task?.tags || [])
       setTaskProjects(task?.projects || [])
       setTagInput('')
@@ -72,6 +76,7 @@ export function TaskForm({ open, onClose, task }: TaskFormProps) {
             tags: taskTags, projects: taskProjects,
             startDate: startDate || null,
             endDate: endDate || null,
+            assigneeId: assigneeId || null,
           },
         })
         toast({ title: 'Task updated', variant: 'success' })
@@ -85,6 +90,7 @@ export function TaskForm({ open, onClose, task }: TaskFormProps) {
           projects: taskProjects,
           ...(startDate ? { startDate } : {}),
           ...(endDate ? { endDate } : {}),
+          ...(assigneeId ? { assigneeId } : {}),
         })
         toast({ title: 'Task created', variant: 'success' })
       }
@@ -275,6 +281,20 @@ export function TaskForm({ open, onClose, task }: TaskFormProps) {
               className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 focus:border-primary-500 dark:focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-colors text-sm"
             />
           </div>
+        </div>
+        <div>
+          <label htmlFor="assignee" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Assignee</label>
+          <select
+            id="assignee"
+            value={assigneeId}
+            onChange={e => setAssigneeId(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 focus:border-primary-500 dark:focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-colors text-sm"
+          >
+            <option value="">Unassigned</option>
+            {(members || []).map(m => (
+              <option key={m.userId} value={m.userId}>{m.name}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Tags</label>

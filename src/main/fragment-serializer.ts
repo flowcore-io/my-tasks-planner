@@ -24,6 +24,7 @@ export function taskToFragmentPayload(task: {
   comments?: TaskComment[]
   startDate?: string
   endDate?: string
+  assigneeId?: string
 }): {
   title: string
   content: string
@@ -48,6 +49,9 @@ export function taskToFragmentPayload(task: {
   }
   if (task.endDate) {
     fmLines.push(`endDate: "${task.endDate}"`)
+  }
+  if (task.assigneeId) {
+    fmLines.push(`assigneeId: "${task.assigneeId}"`)
   }
 
   if (dependencies.length > 0) {
@@ -99,6 +103,7 @@ export function fragmentToTask(fragment: UsableFragment): TaskWithTags {
   const dependencies = Array.isArray(frontmatter.dependencies) ? frontmatter.dependencies as string[] : []
   const startDate = typeof frontmatter.startDate === 'string' ? frontmatter.startDate : undefined
   const endDate = typeof frontmatter.endDate === 'string' ? frontmatter.endDate : undefined
+  const assigneeId = typeof frontmatter.assigneeId === 'string' ? frontmatter.assigneeId : undefined
 
   // Filter tags: only keep simple user tags (no colon-prefixed system tags), deduplicated
   const allTags = fragment.tags || []
@@ -127,6 +132,7 @@ export function fragmentToTask(fragment: UsableFragment): TaskWithTags {
     comments: extractComments(fragment.content || ''),
     startDate,
     endDate,
+    assigneeId,
   }
 }
 

@@ -35,12 +35,14 @@ export const IPC_CHANNELS = {
   USABLE_GET_WORKSPACE: 'usable:get-workspace',
   USABLE_SET_WORKSPACE: 'usable:set-workspace',
   USABLE_CHECK_CONNECTION: 'usable:check-connection',
+  USABLE_LIST_MEMBERS: 'usable:list-members',
   // Chat overlay
   CHAT_OPEN_APP: 'chat:open-app',
   CHAT_SET_IGNORE_MOUSE: 'chat:set-ignore-mouse',
   CHAT_GET_MODE: 'chat:get-mode',
   CHAT_SET_MODE: 'chat:set-mode',
   CHAT_MODE_CHANGED: 'chat:mode-changed',
+  CHAT_INJECT_THEME_CSS: 'chat:inject-theme-css',
   // Cross-window sync
   TASKS_CHANGED: 'tasks:changed',
 } as const

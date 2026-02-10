@@ -48,6 +48,7 @@ const api = {
     setWorkspace: (config: { workspaceId: string; workspaceName: string; taskFragmentTypeId?: string } | null) =>
       ipcRenderer.invoke(IPC_CHANNELS.USABLE_SET_WORKSPACE, config),
     checkConnection: () => ipcRenderer.invoke(IPC_CHANNELS.USABLE_CHECK_CONNECTION),
+    listMembers: () => ipcRenderer.invoke(IPC_CHANNELS.USABLE_LIST_MEMBERS),
   },
   chat: {
     openApp: () => ipcRenderer.invoke(IPC_CHANNELS.CHAT_OPEN_APP),
@@ -55,6 +56,8 @@ const api = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SET_IGNORE_MOUSE, ignore),
     getMode: () => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_MODE),
     setMode: (mode: string) => ipcRenderer.invoke(IPC_CHANNELS.CHAT_SET_MODE, mode),
+    injectThemeCss: (css: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_INJECT_THEME_CSS, css),
     onModeChanged: (callback: (mode: string) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, mode: string): void => {
         callback(mode)

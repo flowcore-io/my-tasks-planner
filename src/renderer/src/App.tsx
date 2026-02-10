@@ -9,6 +9,7 @@ import { KanbanView } from '@/views/KanbanView'
 import { DependencyGraphView } from '@/views/DependencyGraphView'
 import { GanttView } from '@/views/GanttView'
 import { ProjectsView } from '@/views/ProjectsView'
+import { MembersView } from '@/views/MembersView'
 import { UsableEmbed } from '@/components/chat/UsableEmbed'
 import { DockedChat } from '@/components/chat/DockedChat'
 import { SettingsModal } from '@/components/usable/SettingsModal'
@@ -16,7 +17,9 @@ import { Button } from '@/components/ui/Button'
 import { useChatPanel } from '@/hooks/use-chat-panel'
 import { useApiReady } from '@/lib/ipc-client'
 import { useProjects, useProjectFilter } from '@/hooks/use-projects'
+import { useMembers } from '@/hooks/use-members'
 import { useChatMode } from '@/hooks/use-chat-mode'
+import { useTheme } from '@/hooks/use-theme'
 import { LogIn } from 'lucide-react'
 import type { TaskWithTags } from '../../shared/types'
 import usableLogo from '@/assets/usable-logo-transparent.png'
@@ -29,6 +32,10 @@ type AuthState = 'checking' | 'authenticated' | 'unauthenticated' | 'logging-in'
 export default function App() {
   const isReady = useApiReady()
   const qc = useQueryClient()
+
+  // Apply dark/light theme class on <html> — must run in BOTH windows
+  // (bubble overlay + app) so useChatEmbed can detect the correct theme.
+  useTheme()
 
   // Listen for cross-window task mutation broadcasts from the main process.
   // When the other window (chat overlay or app) mutates tasks, this fires
@@ -53,6 +60,12 @@ export default function App() {
   const [dockedChatOpen, setDockedChatOpen] = useState(false)
   const projects = useProjects()
   const { selectedProjects, setSelectedProjects, toggleProject, clearProjects } = useProjectFilter()
+  const { data: members } = useMembers()
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([])
+  const toggleAssignee = useCallback((userId: string) => {
+    setSelectedAssignees(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId])
+  }, [])
+  const clearAssignees = useCallback(() => setSelectedAssignees([]), [])
 
   // Auto-open docked panel when switching to docked mode
   useEffect(() => {
@@ -194,23 +207,30 @@ export default function App() {
           selectedProjects={selectedProjects}
           onToggleProject={toggleProject}
           onClearProjects={clearProjects}
+          members={members}
+          selectedAssignees={selectedAssignees}
+          onToggleAssignee={toggleAssignee}
+          onClearAssignees={clearAssignees}
         />
 
         <main className={`flex-1 ${currentView === 'gantt' ? 'overflow-hidden' : currentView === 'kanban' ? 'overflow-hidden p-4' : 'overflow-auto p-4'}`}>
           {currentView === 'list' && (
-            <ListView filters={filters} onTaskClick={handleTaskClick} projectFilter={selectedProjects} />
+            <ListView filters={filters} onTaskClick={handleTaskClick} projectFilter={selectedProjects} assigneeFilter={selectedAssignees} />
           )}
           {currentView === 'kanban' && (
-            <KanbanView onTaskClick={handleTaskClick} projectFilter={selectedProjects} />
+            <KanbanView onTaskClick={handleTaskClick} projectFilter={selectedProjects} assigneeFilter={selectedAssignees} />
           )}
           {currentView === 'gantt' && (
-            <GanttView onTaskClick={handleTaskClick} projectFilter={selectedProjects} />
+            <GanttView onTaskClick={handleTaskClick} projectFilter={selectedProjects} assigneeFilter={selectedAssignees} />
           )}
           {currentView === 'graph' && (
-            <DependencyGraphView onTaskClick={handleTaskClick} projectFilter={selectedProjects} />
+            <DependencyGraphView onTaskClick={handleTaskClick} projectFilter={selectedProjects} assigneeFilter={selectedAssignees} />
           )}
           {currentView === 'projects' && (
             <ProjectsView onNavigateToProject={handleNavigateToProject} />
+          )}
+          {currentView === 'members' && (
+            <MembersView />
           )}
         </main>
       </div>

@@ -9,7 +9,7 @@ const inflightCalls = new Map<string, Promise<unknown>>()
 export const PARENT_TOOLS: ParentToolSchema[] = [
   {
     name: 'list_tasks',
-    description: 'List all tasks. Each task includes: id, title, description, status, priority, tags (string[]), projects (string[]), dependencies (id[]), startDate?, endDate?, createdAt, updatedAt. Optionally filter by status or priority.',
+    description: 'List all tasks. Each task includes: id, title, description, status, priority, tags (string[]), projects (string[]), dependencies (id[]), assigneeId?, startDate?, endDate?, createdAt, updatedAt. Optionally filter by status or priority.',
     parameters: {
       type: 'object',
       properties: {
@@ -20,7 +20,7 @@ export const PARENT_TOOLS: ParentToolSchema[] = [
   },
   {
     name: 'get_task',
-    description: 'Get a single task by ID with full details including tags, projects, and dependencies',
+    description: 'Get a single task by ID with full details including tags, projects, dependencies, and assigneeId',
     parameters: {
       type: 'object',
       properties: { id: { type: 'string', description: 'Task ID' } },
@@ -29,7 +29,7 @@ export const PARENT_TOOLS: ParentToolSchema[] = [
   },
   {
     name: 'create_task',
-    description: 'Create a new task. Tags and projects are plain string arrays stored on the task directly.',
+    description: 'Create a new task. Tags and projects are plain string arrays stored on the task directly. Use list_members to get valid userId values for assigneeId.',
     parameters: {
       type: 'object',
       properties: {
@@ -41,13 +41,14 @@ export const PARENT_TOOLS: ParentToolSchema[] = [
         projects: { type: 'array', items: { type: 'string' }, description: 'Project names (e.g. ["website-redesign", "q1-launch"])' },
         startDate: { type: 'string', description: 'Planned start date (YYYY-MM-DD format)' },
         endDate: { type: 'string', description: 'Planned end date (YYYY-MM-DD format)' },
+        assigneeId: { type: 'string', description: 'userId of the workspace member to assign (from list_members)' },
       },
       required: ['title'],
     },
   },
   {
     name: 'update_task',
-    description: 'Update an existing task. Only include fields you want to change. Tags and projects replace the full array when provided. Set startDate/endDate to null to clear.',
+    description: 'Update an existing task. Only include fields you want to change. Tags and projects replace the full array when provided. Set startDate/endDate/assigneeId to null to clear.',
     parameters: {
       type: 'object',
       properties: {
@@ -61,6 +62,7 @@ export const PARENT_TOOLS: ParentToolSchema[] = [
         dependencies: { type: 'array', items: { type: 'string' }, description: 'Replace all dependency task IDs' },
         startDate: { type: ['string', 'null'], description: 'Planned start date (YYYY-MM-DD) or null to clear' },
         endDate: { type: ['string', 'null'], description: 'Planned end date (YYYY-MM-DD) or null to clear' },
+        assigneeId: { type: ['string', 'null'], description: 'userId of assignee or null to clear' },
       },
       required: ['id'],
     },
@@ -110,6 +112,10 @@ export const PARENT_TOOLS: ParentToolSchema[] = [
       },
       required: ['taskId', 'text'],
     },
+  },
+  {
+    name: 'list_members',
+    description: 'List all workspace members. Returns an array of {userId, name, email, role}. Use userId as the assigneeId when creating or updating tasks.',
   },
   {
     name: 'list_comments',
@@ -165,6 +171,8 @@ export function createToolCallHandler(qc: QueryClient) {
           return window.api.deps.getGraph()
         case 'add_comment':
           return window.api.tasks.addComment(a.taskId as string, a.text as string)
+        case 'list_members':
+          return window.api.usable.listMembers()
         case 'list_comments': {
           const taskResult = await window.api.tasks.get(a.taskId as string)
           return taskResult.success ? { success: true, data: taskResult.data.comments } : taskResult

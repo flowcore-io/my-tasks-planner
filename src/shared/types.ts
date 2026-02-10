@@ -3,11 +3,20 @@ export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ChatMode = 'bubble' | 'docked'
 
+export interface WorkspaceMember {
+  id: string
+  userId: string
+  name: string
+  email: string
+  role: string
+}
+
 export interface TaskComment {
   id: string
   text: string
   author: string
   authorEmail: string
+  authorId?: string
   createdAt: string
 }
 
@@ -27,6 +36,7 @@ export interface TaskWithTags {
   comments: TaskComment[]
   startDate?: string     // ISO date string (YYYY-MM-DD)
   endDate?: string       // ISO date string (YYYY-MM-DD)
+  assigneeId?: string    // userId of assigned workspace member
 }
 
 export interface CreateTaskInput {
@@ -38,6 +48,7 @@ export interface CreateTaskInput {
   projects?: string[]
   startDate?: string
   endDate?: string
+  assigneeId?: string
 }
 
 export interface UpdateTaskInput {
@@ -53,6 +64,7 @@ export interface UpdateTaskInput {
   comments?: TaskComment[]
   startDate?: string | null
   endDate?: string | null
+  assigneeId?: string | null
 }
 
 export interface GraphData {

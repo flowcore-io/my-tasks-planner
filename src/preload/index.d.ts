@@ -1,4 +1,4 @@
-import type { IpcResponse, TaskWithTags, GraphData, ThemeMode, ChatMode, UsableWorkspace, UsableFragmentType, WorkspaceConfig } from '../shared/types'
+import type { IpcResponse, TaskWithTags, GraphData, ThemeMode, ChatMode, UsableWorkspace, UsableFragmentType, WorkspaceConfig, WorkspaceMember } from '../shared/types'
 
 interface TasksApi {
   list(filters?: { status?: string; priority?: string; tag?: string }): Promise<IpcResponse<TaskWithTags[]>>
@@ -46,6 +46,7 @@ interface UsableApi {
   getWorkspace(): Promise<IpcResponse<WorkspaceConfig | null>>
   setWorkspace(config: WorkspaceConfig | null): Promise<IpcResponse<void>>
   checkConnection(): Promise<IpcResponse<boolean>>
+  listMembers(): Promise<IpcResponse<WorkspaceMember[]>>
 }
 
 interface ChatApi {
@@ -53,6 +54,7 @@ interface ChatApi {
   setIgnoreMouseEvents(ignore: boolean): Promise<IpcResponse<void>>
   getMode(): Promise<IpcResponse<ChatMode>>
   setMode(mode: ChatMode): Promise<IpcResponse<void>>
+  injectThemeCss(css: string): Promise<IpcResponse<void>>
   onModeChanged(callback: (mode: ChatMode) => void): () => void
 }
 

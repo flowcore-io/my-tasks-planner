@@ -7,9 +7,10 @@ import { useGraph, useAddDependency, useRemoveDependency, useAddBlock, useRemove
 import { useTasks } from '@/hooks/use-tasks'
 import { useWorkspaceConfig } from '@/hooks/use-usable'
 import { useProjects } from '@/hooks/use-projects'
+import { useMembers, resolveMemberName } from '@/hooks/use-members'
 import { formatDate, formatShortDate, getScheduleHealth, STATUS_LABELS } from '@/lib/utils'
 import { useState, useRef, useEffect } from 'react'
-import { ExternalLink, Loader2, Search, X, FolderOpen, MessageSquare, Send, Calendar, AlertTriangle, Clock } from 'lucide-react'
+import { ExternalLink, Loader2, Search, X, FolderOpen, MessageSquare, Send, Calendar, AlertTriangle, Clock, User } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -51,6 +52,7 @@ export function TaskDetail({ task: taskProp, open, onClose }: TaskDetailProps) {
   const { toast } = useToast()
   const { data: config } = useWorkspaceConfig()
   const allProjects = useProjects()
+  const { data: members } = useMembers()
 
   // Inline title editing
   const [title, setTitle] = useState('')
@@ -319,6 +321,24 @@ export function TaskDetail({ task: taskProp, open, onClose }: TaskDetailProps) {
         <div className="flex items-center gap-2 flex-wrap">
           <StatusBadge status={task.status} onChange={handleStatusChange} />
           <PriorityBadge priority={task.priority} onChange={handlePriorityChange} />
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium">
+            <User size={10} />
+            <select
+              value={task.assigneeId || ''}
+              onChange={e => {
+                updateTask.mutate(
+                  { id: task.id, data: { assigneeId: e.target.value || null } },
+                  { onError: () => toast({ title: 'Failed to update assignee', variant: 'error' }) }
+                )
+              }}
+              className="bg-transparent border-none outline-none text-xs cursor-pointer"
+            >
+              <option value="">Unassigned</option>
+              {(members || []).map(m => (
+                <option key={m.userId} value={m.userId}>{m.name}</option>
+              ))}
+            </select>
+          </span>
           {task.projects.map(project => (
             <span key={project} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium">
               <FolderOpen size={10} />
