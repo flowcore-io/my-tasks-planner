@@ -1,6 +1,11 @@
 import type { QueryClient } from '@tanstack/react-query'
 import type { ParentToolSchema } from '@/lib/embed-sdk'
 
+// Promise-based deduplication for mutating tool calls.
+// Stores the in-flight Promise immediately (before await), so a duplicate call awaits
+// the same Promise instead of starting a new API call.
+const inflightCalls = new Map<string, Promise<unknown>>()
+
 export const PARENT_TOOLS: ParentToolSchema[] = [
   {
     name: 'list_tasks',
@@ -115,56 +120,82 @@ export const PARENT_TOOLS: ParentToolSchema[] = [
   },
 ]
 
+const MUTATING_TOOLS = new Set([
+  'create_task', 'update_task', 'delete_task',
+  'add_dependency', 'remove_dependency', 'add_comment',
+])
+
 export function createToolCallHandler(qc: QueryClient) {
   return async (tool: string, args: unknown) => {
     const a = args as Record<string, unknown>
-    let result: unknown
 
-    switch (tool) {
-      case 'list_tasks':
-        result = await window.api.tasks.list(a as { status?: string; priority?: string })
-        break
-      case 'get_task':
-        result = await window.api.tasks.get(a.id as string)
-        break
-      case 'create_task':
-        result = await window.api.tasks.create(a as { title: string; description?: string; status?: string; priority?: string; tags?: string[]; projects?: string[] })
-        break
-      case 'update_task': {
-        const { id, ...data } = a
-        result = await window.api.tasks.update(id as string, data)
-        break
+    // Promise-based dedup for mutating calls
+    if (MUTATING_TOOLS.has(tool)) {
+      const key = JSON.stringify({ tool, args })
+      const inflight = inflightCalls.get(key)
+      if (inflight) {
+        console.debug('[chat-tools] Dedup: awaiting in-flight call:', tool, args)
+        return inflight
       }
-      case 'delete_task':
-        result = await window.api.tasks.delete(a.id as string)
-        break
-      case 'add_dependency':
-        result = await window.api.deps.add(a.taskId as string, a.dependsOnId as string)
-        break
-      case 'remove_dependency':
-        result = await window.api.deps.remove(a.taskId as string, a.dependsOnId as string)
-        break
-      case 'get_task_graph':
-        result = await window.api.deps.getGraph()
-        break
-      case 'add_comment':
-        result = await window.api.tasks.addComment(a.taskId as string, a.text as string)
-        break
-      case 'list_comments': {
-        const taskResult = await window.api.tasks.get(a.taskId as string)
-        result = taskResult.success ? { success: true, data: taskResult.data.comments } : taskResult
-        break
-      }
-      default:
-        return { error: `Unknown tool: ${tool}` }
     }
 
-    qc.invalidateQueries({ queryKey: ['tasks'] })
-    qc.invalidateQueries({ queryKey: ['task'] })
-    qc.invalidateQueries({ queryKey: ['graph'] })
-    qc.invalidateQueries({ queryKey: ['tags'] })
+    const execute = async (): Promise<unknown> => {
+      switch (tool) {
+        case 'list_tasks':
+          return window.api.tasks.list(a as { status?: string; priority?: string })
+        case 'get_task':
+          return window.api.tasks.get(a.id as string)
+        case 'create_task':
+          return window.api.tasks.create(a as { title: string; description?: string; status?: string; priority?: string; tags?: string[]; projects?: string[] })
+        case 'update_task': {
+          const { id, ...data } = a
+          return window.api.tasks.update(id as string, data)
+        }
+        case 'delete_task':
+          return window.api.tasks.delete(a.id as string)
+        case 'add_dependency':
+          return window.api.deps.add(a.taskId as string, a.dependsOnId as string)
+        case 'remove_dependency':
+          return window.api.deps.remove(a.taskId as string, a.dependsOnId as string)
+        case 'get_task_graph':
+          return window.api.deps.getGraph()
+        case 'add_comment':
+          return window.api.tasks.addComment(a.taskId as string, a.text as string)
+        case 'list_comments': {
+          const taskResult = await window.api.tasks.get(a.taskId as string)
+          return taskResult.success ? { success: true, data: taskResult.data.comments } : taskResult
+        }
+        default:
+          return { error: `Unknown tool: ${tool}` }
+      }
+    }
 
-    return result
+    // For non-mutating tools, just execute directly
+    if (!MUTATING_TOOLS.has(tool)) {
+      return execute()
+    }
+
+    const key = JSON.stringify({ tool, args })
+    const promise = execute()
+
+    // Store the Promise IMMEDIATELY (synchronously, before await) so duplicates find it
+    inflightCalls.set(key, promise)
+
+    try {
+      const result = await promise
+      // Keep in map briefly to catch late duplicates, then clean up
+      setTimeout(() => inflightCalls.delete(key), 5_000)
+
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['task'] })
+      qc.invalidateQueries({ queryKey: ['graph'] })
+      qc.invalidateQueries({ queryKey: ['tags'] })
+
+      return result
+    } catch (error) {
+      inflightCalls.delete(key)
+      throw error
+    }
   }
 }
 

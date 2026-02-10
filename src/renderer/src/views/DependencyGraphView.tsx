@@ -15,15 +15,16 @@ import {
   MarkerType,
   SelectionMode,
   type OnSelectionChangeParams,
+  type Connection,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import dagre from 'dagre'
-import { useGraph } from '@/hooks/use-dependencies'
+import ELK from 'elkjs/lib/elk.bundled.js'
+import { useGraph, useAddDependency, useRemoveDependency } from '@/hooks/use-dependencies'
 import { useBulkDeleteTasks, useBulkUpdateStatus, useBulkAddToProject } from '@/hooks/use-tasks'
 import { useProjects } from '@/hooks/use-projects'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
-import { ArrowDown, ArrowRight, Play, Filter, MousePointer2, Trash2, Loader2 } from 'lucide-react'
+import { ArrowDown, ArrowRight, Play, Filter, MousePointer2, Trash2, Loader2, ArrowLeftRight, ChevronUp } from 'lucide-react'
 import { STATUS_LABELS } from '@/lib/utils'
 import type { TaskWithTags } from '../../../shared/types'
 
@@ -41,65 +42,106 @@ const STATUS_LABEL: Record<string, string> = {
   archived: 'Archived',
 }
 
-const PRIORITY_DOT: Record<string, string> = {
-  urgent: '#ef4444',
-  high: '#f97316',
-  medium: '#eab308',
-  low: '#9ca3af',
+const PRIORITY_CHEVRONS: Record<string, number> = {
+  urgent: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
 }
 
-const handleStyle = {
-  width: 6,
-  height: 6,
-  background: '#d1d5db',
+const centerHandleStyle: React.CSSProperties = {
+  width: 30,
+  height: 30,
+  background: 'transparent',
   border: 'none',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  cursor: 'crosshair',
+  opacity: 0,
+}
+
+function PriorityChevrons({ priority }: { priority: string }) {
+  const count = PRIORITY_CHEVRONS[priority] ?? 1
+  return (
+    <div className="shrink-0 flex flex-col items-center -space-y-[5px]" title={priority}>
+      {Array.from({ length: count }, (_, i) => (
+        <ChevronUp key={i} size={10} className="text-gray-400 dark:text-gray-500" strokeWidth={2.5} />
+      ))}
+    </div>
+  )
 }
 
 function TaskNode({ data }: { data: { task: TaskWithTags; direction: 'TB' | 'LR'; isRoot: boolean; isDimmed: boolean; isSelected: boolean } }) {
   const accent = STATUS_ACCENT[data.task.status] || STATUS_ACCENT.todo
-  const priorityColor = PRIORITY_DOT[data.task.priority] || PRIORITY_DOT.low
   const statusLabel = STATUS_LABEL[data.task.status] || data.task.status
   const targetPos = data.direction === 'TB' ? Position.Top : Position.Left
   const sourcePos = data.direction === 'TB' ? Position.Bottom : Position.Right
 
   return (
     <div
-      className={`px-3 py-2.5 rounded-lg shadow-sm cursor-pointer min-w-[200px] max-w-[240px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 ${data.isDimmed ? 'opacity-40' : ''} ${data.isSelected ? 'ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-gray-900' : ''}`}
+      className={`group relative px-3 py-2.5 rounded-lg shadow-sm cursor-pointer min-w-[200px] max-w-[240px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 ${data.isDimmed ? 'opacity-40' : ''} ${data.isSelected ? 'ring-2 ring-primary-500 ring-offset-2 dark:ring-offset-gray-900' : ''}`}
       style={{ borderLeftWidth: 4, borderLeftColor: accent }}
     >
-      <Handle type="target" position={targetPos} style={handleStyle} />
+      <Handle type="target" position={targetPos} style={{ ...centerHandleStyle, zIndex: 1 }} />
+      <Handle type="source" position={sourcePos} style={{ ...centerHandleStyle, zIndex: 2 }} />
+      {/* Connection point indicator — visible on hover */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+        <div className="w-3 h-3 rounded-full bg-gray-400/40 border-2 border-gray-400/60" />
+      </div>
       <div className="flex items-center gap-2">
         {data.isRoot && (
           <Play size={12} className="shrink-0 text-green-500 fill-green-500" />
         )}
         <div className="text-[13px] font-semibold truncate text-gray-900 dark:text-gray-100 flex-1">{data.task.title}</div>
-        <span
-          className="shrink-0 w-2.5 h-2.5 rounded-full"
-          style={{ backgroundColor: priorityColor }}
-          title={data.task.priority}
-        />
+        <PriorityChevrons priority={data.task.priority} />
       </div>
       <div className="text-[11px] mt-1 text-gray-500 dark:text-gray-400">{statusLabel}</div>
-      <Handle type="source" position={sourcePos} style={handleStyle} />
     </div>
   )
 }
 
 const nodeTypes = { task: TaskNode }
 
-function getLayoutedElements(nodes: Node[], edges: Edge[], direction: 'TB' | 'LR') {
-  const g = new dagre.graphlib.Graph()
-  g.setDefaultEdgeLabel(() => ({}))
-  g.setGraph({ rankdir: direction, nodesep: 70, ranksep: 100 })
+const elk = new ELK()
 
-  nodes.forEach(node => g.setNode(node.id, { width: 220, height: 70 }))
-  edges.forEach(edge => g.setEdge(edge.source, edge.target))
+async function getLayoutedElements(nodes: Node[], edges: Edge[], direction: 'TB' | 'LR') {
+  const elkDirection = direction === 'TB' ? 'DOWN' : 'RIGHT'
 
-  dagre.layout(g)
+  const graph = {
+    id: 'root',
+    layoutOptions: {
+      'elk.algorithm': 'layered',
+      'elk.direction': elkDirection,
+      'elk.spacing.nodeNode': '80',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '100',
+      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+      'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+      'elk.separateConnectedComponents': 'false',
+    },
+    children: nodes.map(node => ({
+      id: node.id,
+      width: 240,
+      height: 70,
+    })),
+    edges: edges.map(edge => ({
+      id: edge.id,
+      sources: [edge.source],
+      targets: [edge.target],
+    })),
+  }
+
+  const layouted = await elk.layout(graph)
 
   const layoutedNodes = nodes.map(node => {
-    const pos = g.node(node.id)
-    return { ...node, position: { x: pos.x - 110, y: pos.y - 35 } }
+    const elkNode = layouted.children?.find(n => n.id === node.id)
+    return {
+      ...node,
+      position: {
+        x: Math.round((elkNode?.x ?? 0) / 20) * 20,
+        y: Math.round((elkNode?.y ?? 0) / 20) * 20,
+      },
+    }
   })
 
   return { nodes: layoutedNodes, edges }
@@ -122,6 +164,22 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
   const bulkAddProject = useBulkAddToProject()
   const projects = useProjects()
   const { toast } = useToast()
+
+  const addDependency = useAddDependency()
+  const removeDependency = useRemoveDependency()
+  const [clickedEdge, setClickedEdge] = useState<{ id: string; source: string; target: string; x: number; y: number } | null>(null)
+
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    const bounds = (event.currentTarget as HTMLElement).closest('.react-flow')?.getBoundingClientRect()
+    if (!bounds) return
+    setClickedEdge({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      x: event.clientX - bounds.left,
+      y: event.clientY - bounds.top,
+    })
+  }, [])
 
   const onSelectionChange = useCallback(({ nodes }: OnSelectionChangeParams) => {
     setSelectedIds(new Set(nodes.map(n => n.id)))
@@ -159,14 +217,36 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
 
   const hasProjectFilter = projectFilter && projectFilter.length > 0
 
-  const { layoutedNodes, layoutedEdges, orphanCount } = useMemo(() => {
-    if (!graph) return { layoutedNodes: [], layoutedEdges: [], orphanCount: 0 }
+  const [computedLayout, setComputedLayout] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] })
 
-    // Apply project filter first
-    let filteredNodes = graph.nodes
+  const orphanCount = useMemo(() => {
+    if (!graph || hasProjectFilter || showAvailableOnly) return 0
+
+    let filteredNodes = graph.nodes.filter(t => t.status !== 'archived')
+    const filteredNodeIds = new Set(filteredNodes.map(t => t.id))
+    const filteredEdges = graph.edges.filter(e =>
+      filteredNodeIds.has(e.taskId) && filteredNodeIds.has(e.dependsOnId)
+    )
+
+    const connectedIds = new Set<string>()
+    filteredEdges.forEach(edge => {
+      connectedIds.add(edge.taskId)
+      connectedIds.add(edge.dependsOnId)
+    })
+    return filteredNodes.filter(t => !connectedIds.has(t.id)).length
+  }, [graph, hasProjectFilter, showAvailableOnly])
+
+  useEffect(() => {
+    if (!graph) {
+      setComputedLayout({ nodes: [], edges: [] })
+      return
+    }
+
+    // Exclude archived tasks, then apply project filter
+    let filteredNodes = graph.nodes.filter(t => t.status !== 'archived')
     if (hasProjectFilter) {
-      filteredNodes = graph.nodes.filter(t =>
-        t.projects.some(p => projectFilter.includes(p))
+      filteredNodes = filteredNodes.filter(t =>
+        t.projects.some(p => projectFilter!.includes(p))
       )
     }
 
@@ -236,7 +316,6 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
     // When project filter is active, include ALL tasks (including orphans)
     // When no project filter, only show connected tasks (current behavior)
     let tasksToRender: TaskWithTags[]
-    let orphanCount = 0
 
     if (hasProjectFilter || showAvailableOnly) {
       tasksToRender = visibleTasks
@@ -247,7 +326,6 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
         connectedIds.add(edge.dependsOnId)
       })
       tasksToRender = visibleTasks.filter(t => connectedIds.has(t.id))
-      orphanCount = visibleTasks.length - tasksToRender.length
     }
 
     const nodes: Node[] = tasksToRender.map(task => ({
@@ -266,12 +344,18 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
         source: edge.dependsOnId,
         target: edge.taskId,
         type: 'smoothstep',
-        style: { stroke: '#d1d5db' },
-        markerEnd: { type: MarkerType.ArrowClosed, color: '#d1d5db' },
+        style: { stroke: '#6b7280', strokeWidth: 1.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#6b7280', width: 16, height: 16 },
       }))
 
-    const { nodes: ln, edges: le } = getLayoutedElements(nodes, edges, direction)
-    return { layoutedNodes: ln, layoutedEdges: le, orphanCount }
+    let cancelled = false
+    getLayoutedElements(nodes, edges, direction).then(result => {
+      if (!cancelled) {
+        setComputedLayout(result)
+      }
+    })
+
+    return () => { cancelled = true }
   }, [graph, direction, hasProjectFilter, projectFilter, showAvailableOnly])
 
   const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
@@ -280,14 +364,105 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
     onTaskClick(task)
   }, [onTaskClick, selectMode])
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges)
+  const [nodes, setNodes, onNodesChange] = useNodesState(computedLayout.nodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(computedLayout.edges)
 
-  // Update when graph changes
-  useMemo(() => {
-    setNodes(layoutedNodes)
-    setEdges(layoutedEdges)
-  }, [layoutedNodes, layoutedEdges, setNodes, setEdges])
+  const onConnect = useCallback((connection: Connection) => {
+    if (!connection.source || !connection.target) return
+    if (connection.source === connection.target) return
+
+    // Optimistic: show an animated edge immediately
+    const pendingId = `pending-${connection.source}-${connection.target}`
+    const pendingEdge: Edge = {
+      id: pendingId,
+      source: connection.source,
+      target: connection.target,
+      type: 'smoothstep',
+      animated: true,
+      style: { stroke: '#60a5fa', strokeWidth: 2 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#60a5fa', width: 16, height: 16 },
+    }
+    setEdges(eds => [...eds, pendingEdge])
+
+    addDependency.mutate(
+      { taskId: connection.target, dependsOnId: connection.source },
+      {
+        onSuccess: () => toast({ title: 'Dependency added', variant: 'success' }),
+        onError: (err) => {
+          setEdges(eds => eds.filter(e => e.id !== pendingId))
+          toast({ title: err instanceof Error ? err.message : 'Failed to add dependency', variant: 'error' })
+        },
+      },
+    )
+  }, [addDependency, toast, setEdges])
+
+  const handleDeleteEdge = useCallback(() => {
+    if (!clickedEdge) return
+    const { id, source, target } = clickedEdge
+    setClickedEdge(null)
+
+    // Optimistic: remove edge immediately
+    setEdges(eds => eds.filter(e => e.id !== id))
+
+    // source = dependsOnId, target = taskId (matches how edges are built)
+    removeDependency.mutate(
+      { taskId: target, dependsOnId: source },
+      {
+        onSuccess: () => toast({ title: 'Dependency removed', variant: 'success' }),
+        onError: (err) => {
+          toast({ title: err instanceof Error ? err.message : 'Failed to remove dependency', variant: 'error' })
+        },
+      },
+    )
+  }, [clickedEdge, removeDependency, toast, setEdges])
+
+  const handleSwapEdge = useCallback(() => {
+    if (!clickedEdge) return
+    const { id, source, target } = clickedEdge
+    setClickedEdge(null)
+
+    // Optimistic: replace edge with reversed animated one
+    const pendingId = `pending-${target}-${source}`
+    setEdges(eds => [
+      ...eds.filter(e => e.id !== id),
+      {
+        id: pendingId,
+        source: target,
+        target: source,
+        type: 'smoothstep',
+        animated: true,
+        style: { stroke: '#60a5fa', strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#60a5fa', width: 16, height: 16 },
+      },
+    ])
+
+    // Remove old, then add reversed
+    removeDependency.mutate(
+      { taskId: target, dependsOnId: source },
+      {
+        onSuccess: () => {
+          addDependency.mutate(
+            { taskId: source, dependsOnId: target },
+            {
+              onSuccess: () => toast({ title: 'Dependency direction swapped', variant: 'success' }),
+              onError: (err) => {
+                toast({ title: err instanceof Error ? err.message : 'Failed to add reversed dependency', variant: 'error' })
+              },
+            },
+          )
+        },
+        onError: (err) => {
+          toast({ title: err instanceof Error ? err.message : 'Failed to remove original dependency', variant: 'error' })
+        },
+      },
+    )
+  }, [clickedEdge, removeDependency, addDependency, toast, setEdges])
+
+  // Update when layout changes
+  useEffect(() => {
+    setNodes(computedLayout.nodes)
+    setEdges(computedLayout.edges)
+  }, [computedLayout, setNodes, setEdges])
 
   // Update isSelected in node data when selection changes
   useEffect(() => {
@@ -296,6 +471,18 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
       data: { ...node.data, isSelected: selectedIds.has(node.id) },
     })))
   }, [selectedIds, setNodes])
+
+  // Highlight clicked edge
+  useEffect(() => {
+    setEdges(eds => eds.map(edge => {
+      if (edge.id === clickedEdge?.id) {
+        return { ...edge, style: { stroke: '#ef4444', strokeWidth: 2.5 }, markerEnd: { type: MarkerType.ArrowClosed, color: '#ef4444', width: 16, height: 16 } }
+      }
+      // Reset non-clicked edges to default style (skip pending edges)
+      if (edge.id.startsWith('pending-')) return edge
+      return { ...edge, style: { stroke: '#6b7280', strokeWidth: 1.5 }, markerEnd: { type: MarkerType.ArrowClosed, color: '#6b7280', width: 16, height: 16 } }
+    }))
+  }, [clickedEdge, setEdges])
 
   if (isLoading) return <div className="text-gray-500 dark:text-gray-400 text-center py-8">Loading graph...</div>
 
@@ -308,7 +495,7 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
     )
   }
 
-  if (!layoutedNodes.length) {
+  if (!computedLayout.nodes.length) {
     return (
       <div className="text-center py-12 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
         <p className="text-gray-600 dark:text-gray-300 mb-2">
@@ -325,13 +512,16 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
   }
 
   return (
-    <div className="h-full w-full rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden" style={{ minHeight: 500 }}>
+    <div className="relative h-full w-full rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden" style={{ minHeight: 500 }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={() => setClickedEdge(null)}
+        onConnect={onConnect}
         onSelectionChange={onSelectionChange}
         nodeTypes={nodeTypes}
         connectionMode={ConnectionMode.Loose}
@@ -339,11 +529,13 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
         panOnDrag={!selectMode}
         selectionMode={SelectionMode.Partial}
         selectNodesOnDrag={selectMode}
-        nodesConnectable={false}
+        connectionLineStyle={{ stroke: '#60a5fa', strokeWidth: 2 }}
+        snapToGrid={true}
+        snapGrid={[20, 20]}
         fitView
         fitViewOptions={{ padding: 0.2 }}
       >
-        <Background variant={BackgroundVariant.Dots} color="#d1d5db" gap={20} size={1} />
+        <Background variant={BackgroundVariant.Dots} color="#374151" gap={20} size={1} />
         <Controls />
         {/* Bulk action bar */}
         {selectedIds.size > 0 && (
@@ -440,6 +632,31 @@ export function DependencyGraphView({ onTaskClick, projectFilter }: DependencyGr
           </div>
         </Panel>
       </ReactFlow>
+      {/* Edge delete popover — outside ReactFlow to avoid event interference */}
+      {clickedEdge && (
+        <div
+          className="absolute z-50 flex items-center gap-1 px-1 py-1 bg-gray-800 border border-gray-600 rounded-lg shadow-lg"
+          style={{ left: clickedEdge.x, top: clickedEdge.y, transform: 'translate(-50%, -120%)' }}
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+        >
+          <button
+            onClick={handleSwapEdge}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
+          >
+            <ArrowLeftRight size={12} />
+            Swap
+          </button>
+          <div className="w-px h-4 bg-gray-600" />
+          <button
+            onClick={handleDeleteEdge}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-danger-400 hover:text-danger-300 hover:bg-gray-700 transition-colors"
+          >
+            <Trash2 size={12} />
+            Remove
+          </button>
+        </div>
+      )}
     </div>
   )
 }

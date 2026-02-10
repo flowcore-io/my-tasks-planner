@@ -9,7 +9,7 @@ export function useTasks(filters?: { status?: string; priority?: string; tag?: s
       if (!res.success) throw new Error(res.error)
       return res.data as TaskWithTags[]
     },
-    staleTime: 30_000,
+    staleTime: 300_000,
     refetchOnWindowFocus: true,
   })
 }
@@ -24,7 +24,7 @@ export function useTask(id: string | null) {
       return res.data as TaskWithTags
     },
     enabled: !!id,
-    staleTime: 30_000,
+    staleTime: 300_000,
   })
 }
 
@@ -183,6 +183,90 @@ export function useBulkAddToProject() {
       qc.setQueriesData<TaskWithTags[]>({ queryKey: ['tasks'] }, (old) =>
         old ? old.map(t => idSet.has(t.id) && !t.projects.includes(project)
           ? { ...t, projects: [...t.projects, project] }
+          : t
+        ) : old
+      )
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        for (const [key, data] of context.previous) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['graph'] })
+    },
+  })
+}
+
+export function useBulkRenameProject() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ oldName, newName }: { oldName: string; newName: string }) => {
+      const tasksRes = await window.api.tasks.list()
+      if (!tasksRes.success) throw new Error(tasksRes.error)
+      const allTasks = tasksRes.data as TaskWithTags[]
+      const affected = allTasks.filter(t => t.projects.includes(oldName))
+      const results = await Promise.allSettled(
+        affected.map(t => {
+          const newProjects = t.projects.map(p => p === oldName ? newName : p)
+          return window.api.tasks.update(t.id, { projects: newProjects })
+        })
+      )
+      const failed = results.filter(r => r.status === 'rejected')
+      if (failed.length) throw new Error(`Failed to rename project on ${failed.length} tasks`)
+    },
+    onMutate: async ({ oldName, newName }) => {
+      await qc.cancelQueries({ queryKey: ['tasks'] })
+      const previous = qc.getQueriesData<TaskWithTags[]>({ queryKey: ['tasks'] })
+      qc.setQueriesData<TaskWithTags[]>({ queryKey: ['tasks'] }, (old) =>
+        old ? old.map(t => t.projects.includes(oldName)
+          ? { ...t, projects: t.projects.map(p => p === oldName ? newName : p) }
+          : t
+        ) : old
+      )
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        for (const [key, data] of context.previous) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['graph'] })
+    },
+  })
+}
+
+export function useBulkRemoveProject() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (projectName: string) => {
+      const tasksRes = await window.api.tasks.list()
+      if (!tasksRes.success) throw new Error(tasksRes.error)
+      const allTasks = tasksRes.data as TaskWithTags[]
+      const affected = allTasks.filter(t => t.projects.includes(projectName))
+      const results = await Promise.allSettled(
+        affected.map(t => {
+          const newProjects = t.projects.filter(p => p !== projectName)
+          return window.api.tasks.update(t.id, { projects: newProjects })
+        })
+      )
+      const failed = results.filter(r => r.status === 'rejected')
+      if (failed.length) throw new Error(`Failed to remove project from ${failed.length} tasks`)
+    },
+    onMutate: async (projectName) => {
+      await qc.cancelQueries({ queryKey: ['tasks'] })
+      const previous = qc.getQueriesData<TaskWithTags[]>({ queryKey: ['tasks'] })
+      qc.setQueriesData<TaskWithTags[]>({ queryKey: ['tasks'] }, (old) =>
+        old ? old.map(t => t.projects.includes(projectName)
+          ? { ...t, projects: t.projects.filter(p => p !== projectName) }
           : t
         ) : old
       )

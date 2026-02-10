@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { getWorkspaceConfig } from '../workspace-config'
 import { fragmentToTask, taskToFragmentPayload } from '../fragment-serializer'
 import { listFragments, getFragment, updateFragment } from '../usable-api'
+import { invalidateTaskCache, broadcastTasksChanged } from '../task-cache'
 import type { IpcResponse } from '../../shared/types'
 
 export function registerTagHandlers(): void {
@@ -12,7 +13,7 @@ export function registerTagHandlers(): void {
       const config = getWorkspaceConfig()
       if (!config) return { success: true, data: [] }
 
-      const fragments = await listFragments(config.workspaceId, { tags: ['task'], limit: 200 })
+      const fragments = await listFragments(config.workspaceId, { tags: ['source:my-tasks-plan'], limit: 200 })
       const tagSet = new Set<string>()
 
       for (const fragment of fragments) {
@@ -50,6 +51,8 @@ export function registerTagHandlers(): void {
         }
       }
 
+      invalidateTaskCache()
+      broadcastTasksChanged()
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -70,6 +73,8 @@ export function registerTagHandlers(): void {
       const payload = taskToFragmentPayload({ ...task, tags: newTags })
       await updateFragment(taskId, payload)
 
+      invalidateTaskCache()
+      broadcastTasksChanged()
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -86,6 +91,8 @@ export function registerTagHandlers(): void {
       const payload = taskToFragmentPayload({ ...task, tags: newTags })
       await updateFragment(taskId, payload)
 
+      invalidateTaskCache()
+      broadcastTasksChanged()
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }

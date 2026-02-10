@@ -4,14 +4,16 @@ import { Dialog } from '@/components/ui/Dialog'
 import { useWorkspaceConfig, useSetWorkspace, useFragmentTypes } from '@/hooks/use-usable'
 import { useConnectionStatus } from '@/hooks/use-usable'
 import { cn } from '@/lib/utils'
-import type { UsableWorkspace, UsableFragmentType } from '../../../../shared/types'
+import type { UsableWorkspace, UsableFragmentType, ChatMode } from '../../../../shared/types'
 
 interface SettingsModalProps {
   open: boolean
   onClose: () => void
+  chatMode?: ChatMode
+  onChatModeChange?: (mode: ChatMode) => void
 }
 
-export function SettingsModal({ open, onClose }: SettingsModalProps) {
+export function SettingsModal({ open, onClose, chatMode, onChatModeChange }: SettingsModalProps) {
   const { data: currentConfig } = useWorkspaceConfig()
   const { data: isConnected } = useConnectionStatus()
   const setWorkspace = useSetWorkspace()
@@ -98,6 +100,37 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   return (
     <Dialog open={open} onClose={onClose} title="Settings">
       <div className="space-y-4">
+        {/* Chat Mode */}
+        {chatMode && onChatModeChange && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Chat Mode</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => onChatModeChange('bubble')}
+                className={cn(
+                  'flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors border',
+                  chatMode === 'bubble'
+                    ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 border-primary-300 dark:border-primary-700'
+                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-600'
+                )}
+              >
+                Bubble Overlay
+              </button>
+              <button
+                onClick={() => onChatModeChange('docked')}
+                className={cn(
+                  'flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors border',
+                  chatMode === 'docked'
+                    ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 border-primary-300 dark:border-primary-700'
+                    : 'bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-600'
+                )}
+              >
+                Docked Panel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Connection status */}
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800/50">
           <div className={cn('w-2.5 h-2.5 rounded-full', isConnected ? 'bg-green-500' : 'bg-gray-400')} />

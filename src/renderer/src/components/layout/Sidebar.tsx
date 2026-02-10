@@ -3,13 +3,17 @@ import { ThemeToggle } from './ThemeToggle'
 import { Button } from '@/components/ui/Button'
 import { useConnectionStatus, useWorkspaceConfig } from '@/hooks/use-usable'
 import { useState, useEffect, useCallback } from 'react'
-import { List, Columns3, GitBranch, LogIn, LogOut, Settings } from 'lucide-react'
+import { List, Columns3, GitBranch, FolderOpen, LogIn, LogOut, Settings, MessageCircle } from 'lucide-react'
+import type { ChatMode } from '../../../../shared/types'
 import type { ReactNode } from 'react'
 
 interface SidebarProps {
   currentView: string
   onViewChange: (view: string) => void
   onOpenSettings?: () => void
+  chatMode?: ChatMode
+  dockedChatOpen?: boolean
+  onToggleDockedChat?: () => void
 }
 
 const NAV_ITEMS: { id: string; label: string; icon: ReactNode }[] = [
@@ -18,7 +22,11 @@ const NAV_ITEMS: { id: string; label: string; icon: ReactNode }[] = [
   { id: 'graph', label: 'Dependency Graph', icon: <GitBranch size={16} /> },
 ]
 
-export function Sidebar({ currentView, onViewChange, onOpenSettings }: SidebarProps) {
+const SECONDARY_NAV: { id: string; label: string; icon: ReactNode }[] = [
+  { id: 'projects', label: 'Projects', icon: <FolderOpen size={16} /> },
+]
+
+export function Sidebar({ currentView, onViewChange, onOpenSettings, chatMode, dockedChatOpen, onToggleDockedChat }: SidebarProps) {
   const { data: isConnected } = useConnectionStatus()
   const { data: workspaceConfig } = useWorkspaceConfig()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -91,6 +99,41 @@ export function Sidebar({ currentView, onViewChange, onOpenSettings }: SidebarPr
           </button>
         ))}
 
+        <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
+
+        {SECONDARY_NAV.map(item => (
+          <button
+            key={item.id}
+            onClick={() => onViewChange(item.id)}
+            className={cn(
+              'w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
+              currentView === item.id
+                ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+            )}
+          >
+            {item.icon}
+            {item.label}
+          </button>
+        ))}
+
+        {chatMode === 'docked' && onToggleDockedChat && (
+          <>
+            <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
+            <button
+              onClick={onToggleDockedChat}
+              className={cn(
+                'w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2',
+                dockedChatOpen
+                  ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              )}
+            >
+              <MessageCircle size={16} />
+              Chat
+            </button>
+          </>
+        )}
       </nav>
 
       <div className="p-3 border-t border-gray-200 dark:border-gray-700 space-y-2">

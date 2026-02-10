@@ -1,10 +1,11 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { UsableChatEmbed, createUsableChatEmbed } from '@/lib/embed-sdk'
-import type { ContextItem, ParentToolSchema } from '@/lib/embed-sdk'
+import { createUsableChatEmbed } from '@/lib/embed-sdk'
+import type { UsableChatEmbed, ContextItem, ParentToolSchema, MultiplexerEvent } from '@/lib/embed-sdk'
 
 interface UseUsableChatOptions {
   onToolCall?: (tool: string, args: unknown) => Promise<unknown> | unknown
   onEvent?: (event: string, data: unknown) => void
+  onMultiplexerStream?: (events: MultiplexerEvent[]) => void
   onError?: (code: string, message: string) => void
   onTokenRefreshRequest?: () => Promise<string>
   initialContext?: ContextItem[]
@@ -25,8 +26,9 @@ export function useUsableChat(
     const iframe = iframeRef.current
     if (!iframe) return
 
+    const chatBaseUrl = (import.meta.env.VITE_USABLE_CHAT_URL as string) || 'https://chat.usable.dev'
     const embed = createUsableChatEmbed(iframe, {
-      iframeOrigin: 'https://chat.usable.dev',
+      iframeOrigin: chatBaseUrl,
       onReady: () => {
         console.debug('[useUsableChat] READY received from embed')
         setIsReady(true)
@@ -36,6 +38,7 @@ export function useUsableChat(
         return optionsRef.current.onToolCall?.(tool, args)
       },
       onEvent: (event, data) => optionsRef.current.onEvent?.(event, data),
+      onMultiplexerStream: (events) => optionsRef.current.onMultiplexerStream?.(events),
       onError: (code, message) => {
         console.debug('[useUsableChat] Error from embed:', code, message)
         optionsRef.current.onError?.(code, message)
@@ -83,5 +86,9 @@ export function useUsableChat(
     embedRef.current?.setAuth(token)
   }, [])
 
-  return { isReady, conversationId, addContext, setAuth, embed: embedRef.current }
+  const setCssVariables = useCallback((variables: Record<string, string>) => {
+    embedRef.current?.setCssVariables(variables)
+  }, [])
+
+  return { isReady, conversationId, addContext, setAuth, setCssVariables, embed: embedRef.current }
 }

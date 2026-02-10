@@ -3,9 +3,15 @@ import crypto from 'node:crypto'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { getWorkspaceConfig } from '../workspace-config'
 import { taskToFragmentPayload, fragmentToTask } from '../fragment-serializer'
-import { listFragments, getFragment, createFragment, updateFragment, countFragments } from '../usable-api'
+import { createFragment, updateFragment, countFragments } from '../usable-api'
+import { getCachedTaskFragments, getCachedFragment, invalidateTaskCache, broadcastTasksChanged } from '../task-cache'
 import { getTokenClaims } from '../auth'
 import type { IpcResponse, TaskWithTags, CreateTaskInput, UpdateTaskInput } from '../../shared/types'
+
+// Promise-based dedup guard for task creation — prevents duplicate creates from race conditions.
+// Stores the in-flight Promise immediately (before await), so a second call finds it and awaits
+// the same Promise instead of starting a new creation.
+const inflightCreates = new Map<string, Promise<IpcResponse<TaskWithTags>>>()
 
 function requireConfig() {
   const config = getWorkspaceConfig()
@@ -19,12 +25,16 @@ export function registerTaskHandlers(): void {
     try {
       const config = requireConfig()
 
-      const tags = ['task']
-      if (filters?.status) tags.push(`status:${filters.status}`)
-      if (filters?.priority) tags.push(`priority:${filters.priority}`)
-
-      const fragments = await listFragments(config.workspaceId, { tags, limit: 200 })
+      const fragments = await getCachedTaskFragments(config.workspaceId)
       let tasks = fragments.map(fragmentToTask)
+
+      // Client-side filter for status/priority (cache always holds all tasks)
+      if (filters?.status) {
+        tasks = tasks.filter(t => t.status === filters.status)
+      }
+      if (filters?.priority) {
+        tasks = tasks.filter(t => t.priority === filters.priority)
+      }
 
       // Exclude archived unless explicitly filtering for them
       if (!filters?.status || filters.status !== 'archived') {
@@ -47,7 +57,8 @@ export function registerTaskHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.TASKS_GET, async (_event, id: string): Promise<IpcResponse<TaskWithTags>> => {
     try {
-      const fragment = await getFragment(id)
+      const config = requireConfig()
+      const fragment = await getCachedFragment(config.workspaceId, id)
       return { success: true, data: fragmentToTask(fragment) }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -55,44 +66,87 @@ export function registerTaskHandlers(): void {
   })
 
   ipcMain.handle(IPC_CHANNELS.TASKS_CREATE, async (_event, data: CreateTaskInput): Promise<IpcResponse<TaskWithTags>> => {
+    const dedupKey = JSON.stringify({ t: data.title, s: data.status, p: data.priority, tags: data.tags, proj: data.projects })
+
+    // If an identical create is already in-flight, await the same Promise
+    const inflight = inflightCreates.get(dedupKey)
+    if (inflight) {
+      console.log('[task-handlers] Dedup: awaiting in-flight create for:', data.title)
+      return inflight
+    }
+
+    const promise = (async (): Promise<IpcResponse<TaskWithTags>> => {
+      try {
+        const config = requireConfig()
+        const now = new Date().toISOString()
+
+        // Get current task count for ordering
+        const order = await countFragments(config.workspaceId, { tags: ['source:my-tasks-plan'] })
+
+        const payload = taskToFragmentPayload({
+          title: data.title,
+          description: data.description,
+          status: data.status || 'todo',
+          priority: data.priority || 'medium',
+          kanbanOrder: order,
+          listOrder: order,
+          createdAt: now,
+          tags: data.tags,
+          projects: data.projects,
+          dependencies: [],
+        })
+
+        const result = await createFragment({
+          workspaceId: config.workspaceId,
+          fragmentTypeId: config.taskFragmentTypeId!,
+          ...payload,
+        })
+
+        invalidateTaskCache()
+      broadcastTasksChanged()
+
+        // Construct response from input data instead of re-fetching
+        const created: TaskWithTags = {
+          id: result.fragmentId,
+          title: data.title,
+          description: data.description || '',
+          status: data.status || 'todo',
+          priority: data.priority || 'medium',
+          kanbanOrder: order,
+          listOrder: order,
+          createdAt: now,
+          updatedAt: now,
+          tags: data.tags || [],
+          projects: data.projects || [],
+          dependencies: [],
+          comments: [],
+        }
+
+        return { success: true, data: created }
+      } catch (error) {
+        return { success: false, error: String(error) }
+      }
+    })()
+
+    // Store the Promise IMMEDIATELY (synchronously, before await) so the next call finds it
+    inflightCreates.set(dedupKey, promise)
+
     try {
-      const config = requireConfig()
-      const now = new Date().toISOString()
-
-      // Get current task count for ordering
-      const order = await countFragments(config.workspaceId, { tags: ['task'] })
-
-      const payload = taskToFragmentPayload({
-        title: data.title,
-        description: data.description,
-        status: data.status || 'todo',
-        priority: data.priority || 'medium',
-        kanbanOrder: order,
-        listOrder: order,
-        createdAt: now,
-        tags: data.tags,
-        projects: data.projects,
-        dependencies: [],
-      })
-
-      const result = await createFragment({
-        workspaceId: config.workspaceId,
-        fragmentTypeId: config.taskFragmentTypeId!,
-        ...payload,
-      })
-
-      // Fetch the created fragment to return complete data
-      const fragment = await getFragment(result.fragmentId)
-      return { success: true, data: fragmentToTask(fragment) }
+      const response = await promise
+      // Keep in map briefly to catch late duplicates, then clean up
+      setTimeout(() => inflightCreates.delete(dedupKey), 5_000)
+      return response
     } catch (error) {
+      inflightCreates.delete(dedupKey)
       return { success: false, error: String(error) }
     }
   })
 
   ipcMain.handle(IPC_CHANNELS.TASKS_UPDATE, async (_event, id: string, data: UpdateTaskInput): Promise<IpcResponse<TaskWithTags>> => {
     try {
-      // Fetch current fragment
-      const fragment = await getFragment(id)
+      const config = requireConfig()
+      // Fetch current fragment (from cache when available)
+      const fragment = await getCachedFragment(config.workspaceId, id)
       const current = fragmentToTask(fragment)
 
       // Merge updates
@@ -113,9 +167,16 @@ export function registerTaskHandlers(): void {
       const payload = taskToFragmentPayload(merged)
       await updateFragment(id, payload)
 
-      // Fetch updated fragment
-      const updated = await getFragment(id)
-      return { success: true, data: fragmentToTask(updated) }
+      invalidateTaskCache()
+      broadcastTasksChanged()
+
+      // Return merged data directly instead of re-fetching
+      const result: TaskWithTags = {
+        id,
+        ...merged,
+        updatedAt: new Date().toISOString(),
+      }
+      return { success: true, data: result }
     } catch (error) {
       return { success: false, error: String(error) }
     }
@@ -123,8 +184,9 @@ export function registerTaskHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.TASKS_DELETE, async (_event, id: string): Promise<IpcResponse> => {
     try {
+      const config = requireConfig()
       // Archive via status change (no delete endpoint in API)
-      const fragment = await getFragment(id)
+      const fragment = await getCachedFragment(config.workspaceId, id)
       const current = fragmentToTask(fragment)
 
       const payload = taskToFragmentPayload({
@@ -141,6 +203,8 @@ export function registerTaskHandlers(): void {
         tags: [...payload.tags.filter(t => !t.startsWith('status:')), 'status:archived'],
       })
 
+      invalidateTaskCache()
+      broadcastTasksChanged()
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -149,8 +213,9 @@ export function registerTaskHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.TASKS_REORDER, async (_event, updates: { id: string; kanbanOrder?: number; listOrder?: number; status?: string }[]): Promise<IpcResponse> => {
     try {
+      const config = requireConfig()
       await Promise.all(updates.map(async (update) => {
-        const fragment = await getFragment(update.id)
+        const fragment = await getCachedFragment(config.workspaceId, update.id)
         const current = fragmentToTask(fragment)
 
         const merged = {
@@ -171,6 +236,8 @@ export function registerTaskHandlers(): void {
         await updateFragment(update.id, payload)
       }))
 
+      invalidateTaskCache()
+      broadcastTasksChanged()
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -179,19 +246,21 @@ export function registerTaskHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.TASKS_ADD_COMMENT, async (_event, taskId: string, text: string): Promise<IpcResponse<TaskWithTags>> => {
     try {
-      const fragment = await getFragment(taskId)
+      const config = requireConfig()
+      const fragment = await getCachedFragment(config.workspaceId, taskId)
       const current = fragmentToTask(fragment)
 
       const claims = getTokenClaims()
       const author = claims?.name || 'Unknown'
       const authorEmail = claims?.email || ''
 
+      const now = new Date().toISOString()
       const newComment = {
         id: crypto.randomUUID(),
         text,
         author,
         authorEmail,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
       }
 
       const merged = {
@@ -211,8 +280,16 @@ export function registerTaskHandlers(): void {
       const payload = taskToFragmentPayload(merged)
       await updateFragment(taskId, payload)
 
-      const updated = await getFragment(taskId)
-      return { success: true, data: fragmentToTask(updated) }
+      invalidateTaskCache()
+      broadcastTasksChanged()
+
+      // Return merged data directly instead of re-fetching
+      const result: TaskWithTags = {
+        id: taskId,
+        ...merged,
+        updatedAt: now,
+      }
+      return { success: true, data: result }
     } catch (error) {
       return { success: false, error: String(error) }
     }

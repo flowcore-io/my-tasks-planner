@@ -1,8 +1,9 @@
-import { useTasks, useBulkDeleteTasks, useBulkUpdateStatus } from '@/hooks/use-tasks'
+import { useTasks, useBulkDeleteTasks, useBulkUpdateStatus, useBulkAddToProject } from '@/hooks/use-tasks'
 import { StatusBadge } from '@/components/tasks/StatusBadge'
 import { PriorityBadge } from '@/components/tasks/PriorityBadge'
 import { TaskActions } from '@/components/tasks/TaskActions'
 import { formatDate, STATUS_LABELS } from '@/lib/utils'
+import { useProjects } from '@/hooks/use-projects'
 import { useState } from 'react'
 import { Loader2, Trash2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
@@ -28,6 +29,8 @@ export function ListView({ filters, onTaskClick, projectFilter }: ListViewProps)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const bulkDelete = useBulkDeleteTasks()
   const bulkStatus = useBulkUpdateStatus()
+  const bulkAddProject = useBulkAddToProject()
+  const projects = useProjects()
   const { toast } = useToast()
 
   const handleSort = (key: SortKey) => {
@@ -90,6 +93,16 @@ export function ListView({ filters, onTaskClick, projectFilter }: ListViewProps)
     })
   }
 
+  const handleBulkAddToProject = (project: string) => {
+    const ids = [...selected]
+    const count = ids.length
+    setSelected(new Set())
+    bulkAddProject.mutate({ ids, project }, {
+      onSuccess: () => toast({ title: `Added ${count} task${count > 1 ? 's' : ''} to "${project}"`, variant: 'success' }),
+      onError: () => toast({ title: 'Failed to add tasks to project', variant: 'error' }),
+    })
+  }
+
   if (isLoading) return <div className="text-gray-500 dark:text-gray-400 text-center py-8">Loading tasks...</div>
 
   if (!sortedTasks.length) {
@@ -133,6 +146,19 @@ export function ListView({ filters, onTaskClick, projectFilter }: ListViewProps)
               <option key={value} value={value}>{label}</option>
             ))}
           </select>
+          {projects.length > 0 && (
+            <select
+              defaultValue=""
+              disabled={bulkAddProject.isPending}
+              onChange={e => { if (e.target.value) handleBulkAddToProject(e.target.value); e.target.value = '' }}
+              className="text-sm px-2 py-1 rounded border border-primary-300 dark:border-primary-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-50"
+            >
+              <option value="" disabled>{bulkAddProject.isPending ? 'Adding...' : 'Add to project...'}</option>
+              {projects.map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          )}
           <button
             onClick={handleBulkDelete}
             disabled={bulkDelete.isPending}
@@ -167,6 +193,7 @@ export function ListView({ filters, onTaskClick, projectFilter }: ListViewProps)
               <SortHeader label="Status" field="status" />
               <SortHeader label="Priority" field="priority" />
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Tags</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Projects</th>
               <SortHeader label="Created" field="createdAt" />
               <th className="w-10 px-2 py-3"></th>
             </tr>
@@ -200,6 +227,15 @@ export function ListView({ filters, onTaskClick, projectFilter }: ListViewProps)
                     {[...new Set(task.tags)].map(tag => (
                       <span key={tag} className="px-1.5 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                         {tag}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex gap-1 flex-wrap">
+                    {task.projects.map(p => (
+                      <span key={p} className="px-1.5 py-0.5 rounded text-xs bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
+                        {p}
                       </span>
                     ))}
                   </div>

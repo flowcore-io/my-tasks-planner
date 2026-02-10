@@ -53,6 +53,24 @@ const api = {
     openApp: () => ipcRenderer.invoke(IPC_CHANNELS.CHAT_OPEN_APP),
     setIgnoreMouseEvents: (ignore: boolean) =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_SET_IGNORE_MOUSE, ignore),
+    getMode: () => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_MODE),
+    setMode: (mode: string) => ipcRenderer.invoke(IPC_CHANNELS.CHAT_SET_MODE, mode),
+    onModeChanged: (callback: (mode: string) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, mode: string): void => {
+        callback(mode)
+      }
+      ipcRenderer.on(IPC_CHANNELS.CHAT_MODE_CHANGED, handler)
+      return () => {
+        ipcRenderer.removeListener(IPC_CHANNELS.CHAT_MODE_CHANGED, handler)
+      }
+    },
+  },
+  onTasksChanged: (callback: () => void) => {
+    const handler = (): void => { callback() }
+    ipcRenderer.on(IPC_CHANNELS.TASKS_CHANGED, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.TASKS_CHANGED, handler)
+    }
   },
   auth: {
     login: () => ipcRenderer.invoke(IPC_CHANNELS.AUTH_LOGIN),

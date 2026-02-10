@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 import { TaskForm } from '@/components/tasks/TaskForm'
@@ -6,12 +7,15 @@ import { TaskDetail } from '@/components/tasks/TaskDetail'
 import { ListView } from '@/views/ListView'
 import { KanbanView } from '@/views/KanbanView'
 import { DependencyGraphView } from '@/views/DependencyGraphView'
+import { ProjectsView } from '@/views/ProjectsView'
 import { UsableEmbed } from '@/components/chat/UsableEmbed'
+import { DockedChat } from '@/components/chat/DockedChat'
 import { SettingsModal } from '@/components/usable/SettingsModal'
 import { Button } from '@/components/ui/Button'
 import { useChatPanel } from '@/hooks/use-chat-panel'
 import { useApiReady } from '@/lib/ipc-client'
 import { useProjects, useProjectFilter } from '@/hooks/use-projects'
+import { useChatMode } from '@/hooks/use-chat-mode'
 import { LogIn } from 'lucide-react'
 import type { TaskWithTags } from '../../shared/types'
 
@@ -21,6 +25,19 @@ type AuthState = 'checking' | 'authenticated' | 'unauthenticated' | 'logging-in'
 
 export default function App() {
   const isReady = useApiReady()
+  const qc = useQueryClient()
+
+  // Listen for cross-window task mutation broadcasts from the main process.
+  // When the other window (chat overlay or app) mutates tasks, this fires
+  // so our QueryClient refetches fresh data.
+  useEffect(() => {
+    return window.api.onTasksChanged(() => {
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['task'] })
+      qc.invalidateQueries({ queryKey: ['graph'] })
+      qc.invalidateQueries({ queryKey: ['tags'] })
+    })
+  }, [qc])
   const [currentView, setCurrentView] = useState('list')
   const [statusFilter, setStatusFilter] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
@@ -29,8 +46,19 @@ export default function App() {
   const [showDetail, setShowDetail] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const { chatState, bubbleCorner, setBubbleCorner, toggleChat, closeChat, openApp } = useChatPanel()
+  const { chatMode, setMode: setChatMode } = useChatMode()
+  const [dockedChatOpen, setDockedChatOpen] = useState(false)
   const projects = useProjects()
-  const { selectedProjects, toggleProject, clearProjects } = useProjectFilter()
+  const { selectedProjects, setSelectedProjects, toggleProject, clearProjects } = useProjectFilter()
+
+  // Auto-open docked panel when switching to docked mode
+  useEffect(() => {
+    if (chatMode === 'docked') {
+      setDockedChatOpen(true)
+    } else {
+      setDockedChatOpen(false)
+    }
+  }, [chatMode])
 
   // Auth gate for app mode
   const [authState, setAuthState] = useState<AuthState>('checking')
@@ -123,6 +151,11 @@ export default function App() {
     setShowDetail(true)
   }
 
+  const handleNavigateToProject = (projectName: string) => {
+    setSelectedProjects([projectName])
+    setCurrentView('list')
+  }
+
   const filters = {
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(priorityFilter ? { priority: priorityFilter } : {}),
@@ -134,6 +167,9 @@ export default function App() {
         currentView={currentView}
         onViewChange={setCurrentView}
         onOpenSettings={() => setShowSettings(true)}
+        chatMode={chatMode}
+        dockedChatOpen={dockedChatOpen}
+        onToggleDockedChat={() => setDockedChatOpen(prev => !prev)}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -159,8 +195,18 @@ export default function App() {
           {currentView === 'graph' && (
             <DependencyGraphView onTaskClick={handleTaskClick} projectFilter={selectedProjects} />
           )}
+          {currentView === 'projects' && (
+            <ProjectsView onNavigateToProject={handleNavigateToProject} />
+          )}
         </main>
       </div>
+
+      {chatMode === 'docked' && (
+        <DockedChat
+          open={dockedChatOpen}
+          onClose={() => setDockedChatOpen(false)}
+        />
+      )}
 
       <TaskForm
         open={showTaskForm}
@@ -176,6 +222,8 @@ export default function App() {
       <SettingsModal
         open={showSettings}
         onClose={() => setShowSettings(false)}
+        chatMode={chatMode}
+        onChatModeChange={setChatMode}
       />
     </div>
   )

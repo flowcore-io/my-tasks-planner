@@ -25,4 +25,5 @@ export const STATUS_ORDER = ['todo', 'in-progress', 'done', 'archived'] as const
 
 export const LOCALSTORAGE_KEYS = {
   projectFilter: 'projectFilter',
+  createdProjects: 'createdProjects',
 } as const

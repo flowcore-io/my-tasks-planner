@@ -1,13 +1,9 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { useUsableChat } from '@/hooks/use-usable-chat'
+import { useRef, useCallback, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { PARENT_TOOLS, createToolCallHandler, handleTokenRefreshRequest } from '@/lib/chat-tools'
+import { useChatEmbed } from '@/hooks/use-chat-embed'
 import { motion, useMotionValue } from 'framer-motion'
-import { MessageCircle, X, ExternalLink } from 'lucide-react'
+import { MessageCircle, X, ExternalLink, PanelRight } from 'lucide-react'
 import type { ChatState, BubbleCorner } from '@/hooks/use-chat-panel'
-
-const EMBED_TOKEN = import.meta.env.VITE_USABLE_EMBED_TOKEN
 
 const CORNER_POSITIONS: Record<BubbleCorner, React.CSSProperties> = {
   'bottom-right': { bottom: 20, right: 20, top: 'auto', left: 'auto' },
@@ -40,41 +36,13 @@ export function UsableEmbed({
   onOpenApp,
   onBubbleCornerChange,
 }: UsableEmbedProps) {
-  const [authToken, setAuthToken] = useState<string | null>(null)
-  const iframeRef = useRef<HTMLIFrameElement>(null)
-  const qc = useQueryClient()
+  const { iframeRef, embedSrc } = useChatEmbed()
 
-  useEffect(() => {
-    window.api.auth.getToken().then((result) => {
-      if (result.success && result.data) setAuthToken(result.data)
-    })
-    const cleanup = window.api.auth.onTokenChanged((token) => {
-      setAuthToken(token)
-    })
-    return cleanup
+  const handleDock = useCallback(() => {
+    window.api.chat.setMode('docked')
   }, [])
-
-  const onTokenRefresh = useCallback(async (): Promise<string> => {
-    return handleTokenRefreshRequest(setAuthToken)
-  }, [])
-
-  const handleToolCall = useCallback(createToolCallHandler(qc), [qc])
-
-  const { isReady, setAuth } = useUsableChat(iframeRef, {
-    tools: PARENT_TOOLS,
-    onToolCall: handleToolCall,
-    onTokenRefreshRequest: onTokenRefresh,
-  })
-
-  useEffect(() => {
-    if (isReady && authToken) {
-      setAuth(authToken)
-    }
-  }, [isReady, authToken, setAuth])
 
   // Mouse enter/leave — toggle click-through on the transparent overlay window.
-  // When mouse is over interactive content, disable ignore so clicks register.
-  // When mouse leaves, re-enable ignore so clicks pass through to the desktop.
   const handleMouseEnter = useCallback(() => {
     window.api.chat.setIgnoreMouseEvents(false)
   }, [])
@@ -135,7 +103,7 @@ export function UsableEmbed({
     onToggle()
   }, [onToggle])
 
-  if (!EMBED_TOKEN) return null
+  if (!embedSrc) return null
 
   const isOpen = chatState === 'floating'
 
@@ -156,6 +124,13 @@ export function UsableEmbed({
           <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Chat</span>
           <div className="flex items-center gap-1">
             <button
+              onClick={handleDock}
+              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
+              title="Dock chat in app window"
+            >
+              <PanelRight size={14} />
+            </button>
+            <button
               onClick={onOpenApp}
               className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
               title="Open task manager"
@@ -172,7 +147,7 @@ export function UsableEmbed({
         </div>
         <iframe
           ref={iframeRef}
-          src={`https://chat.usable.dev/embed?token=${EMBED_TOKEN}`}
+          src={embedSrc}
           className="flex-1 w-full border-0 rounded-b-2xl"
           allow="clipboard-write"
           title="Usable Chat"

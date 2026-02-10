@@ -21,6 +21,16 @@ export interface ParentToolSchema {
   }
 }
 
+export interface MultiplexerEvent {
+  type: 'toolStart' | 'toolResult' | 'expertStart' | 'expertResult' | 'error'
+  timestamp: number
+  data: {
+    tool?: { name: string; input: unknown; output?: unknown }
+    expert?: { id: string; name: string; query?: string; result?: unknown }
+    error?: { code: string; message: string }
+  }
+}
+
 type ParentToIframeMessage =
   | { type: 'AUTH'; payload: { token: string } }
   | { type: 'CONFIG'; payload: unknown }
@@ -29,11 +39,13 @@ type ParentToIframeMessage =
   | { type: 'ADD_CONTEXT'; payload: { items: ContextItem[] } }
   | { type: 'REGISTER_TOOLS'; payload: { tools: ParentToolSchema[] } }
   | { type: 'NEW_CONVERSATION' }
+  | { type: 'SET_CSS_VARIABLES'; payload: { variables: Record<string, string> } }
 
 type IframeToParentMessage =
   | { type: 'READY' }
   | { type: 'TOOL_CALL'; payload: { requestId: string; tool: string; args: unknown } }
   | { type: 'EVENT'; payload: { event: string; data: unknown } }
+  | { type: 'MULTIPLEXER_STREAM'; payload: MultiplexerEvent[] }
   | { type: 'ERROR'; payload: { code: string; message: string } }
   | { type: 'RESIZE'; payload: { width: number; height: number } }
   | { type: 'CONVERSATION_CHANGED'; payload: { conversationId: string | null } }
@@ -44,6 +56,7 @@ export interface UsableChatEmbedOptions {
   iframeOrigin?: string
   onToolCall?: (tool: string, args: unknown) => Promise<unknown> | unknown
   onEvent?: (event: string, data: unknown) => void
+  onMultiplexerStream?: (events: MultiplexerEvent[]) => void
   onError?: (code: string, message: string) => void
   onResize?: (width: number, height: number) => void
   onConversationChange?: (conversationId: string | null) => void
@@ -52,35 +65,57 @@ export interface UsableChatEmbedOptions {
   onReady?: () => void
 }
 
+// ── Singleton message handler ──
+// Guarantees exactly ONE window message listener across all instances,
+// HMR reloads, and React StrictMode double-mounts.
+// The active embed registers itself as the handler; previous ones are overwritten.
+
+const GLOBAL_KEY = '__usableChatEmbed'
+const HANDLED_KEY = '__usableChatHandledIds'
+
+// Deduplication set on window — survives module reloads
+if (!(window as any)[HANDLED_KEY]) {
+  ;(window as any)[HANDLED_KEY] = new Set<string>()
+}
+const handledRequestIds: Set<string> = (window as any)[HANDLED_KEY]
+
+function ensureGlobalListener() {
+  if ((window as any)[`${GLOBAL_KEY}_listening`]) return
+  ;(window as any)[`${GLOBAL_KEY}_listening`] = true
+
+  window.addEventListener('message', (event: MessageEvent) => {
+    const embed: UsableChatEmbed | null = (window as any)[GLOBAL_KEY]
+    if (!embed) return
+    embed._handleMessage(event)
+  })
+}
+
 export class UsableChatEmbed {
   private iframe: HTMLIFrameElement
   private options: UsableChatEmbedOptions
   private iframeOrigin: string
   private readyCallbacks: (() => void)[] = []
   private isReady = false
-  private messageHandler: (event: MessageEvent) => void
-  private handledRequestIds = new Set<string>()
 
   constructor(iframe: HTMLIFrameElement, options: UsableChatEmbedOptions = {}) {
     this.iframe = iframe
     this.options = options
     this.iframeOrigin = options.iframeOrigin || new URL(iframe.src).origin
 
-    this.messageHandler = this.handleMessage.bind(this)
-    window.addEventListener('message', this.messageHandler)
+    // Register as the active embed — overwrites any previous instance
+    ;(window as any)[GLOBAL_KEY] = this
+    ensureGlobalListener()
   }
 
-  private handleMessage(event: MessageEvent) {
+  /** @internal — called by the singleton global listener */
+  _handleMessage(event: MessageEvent) {
     if (event.origin !== this.iframeOrigin) {
-      if (event.data?.type) {
-        console.debug('[UsableEmbed] Ignored message from origin:', event.origin, 'expected:', this.iframeOrigin, 'type:', event.data.type)
-      }
       return
     }
 
     const msg = event.data as IframeToParentMessage
     if (!msg || typeof msg.type !== 'string') return
-    console.debug('[UsableEmbed] Received message:', msg.type)
+    console.debug('[UsableEmbed] Received:', msg.type)
 
     switch (msg.type) {
       case 'READY':
@@ -91,11 +126,11 @@ export class UsableChatEmbed {
       case 'TOOL_CALL':
         if (this.options.onToolCall) {
           const { requestId, tool, args } = msg.payload
-          if (this.handledRequestIds.has(requestId)) {
+          if (handledRequestIds.has(requestId)) {
             console.debug('[UsableEmbed] Duplicate TOOL_CALL ignored:', requestId)
             break
           }
-          this.handledRequestIds.add(requestId)
+          handledRequestIds.add(requestId)
           Promise.resolve(this.options.onToolCall(tool, args)).then(result => {
             this.send({ type: 'TOOL_RESPONSE', payload: { requestId, result } })
           })
@@ -103,6 +138,9 @@ export class UsableChatEmbed {
         break
       case 'EVENT':
         this.options.onEvent?.(msg.payload.event, msg.payload.data)
+        break
+      case 'MULTIPLEXER_STREAM':
+        this.options.onMultiplexerStream?.(msg.payload)
         break
       case 'ERROR':
         this.options.onError?.(msg.payload.code, msg.payload.message)
@@ -158,11 +196,24 @@ export class UsableChatEmbed {
     this.send({ type: 'REGISTER_TOOLS', payload: { tools } })
   }
 
+  setCssVariables(variables: Record<string, string>) {
+    const safeVars: Record<string, string> = {}
+    for (const [key, value] of Object.entries(variables)) {
+      if (key.startsWith('--uc-')) {
+        safeVars[key] = value
+      }
+    }
+    this.send({ type: 'SET_CSS_VARIABLES', payload: { variables: safeVars } })
+  }
+
   destroy() {
-    window.removeEventListener('message', this.messageHandler)
+    // Unregister as active embed — but do NOT remove the global listener
+    // (it's harmless when no embed is registered, and avoids listener accumulation)
+    if ((window as any)[GLOBAL_KEY] === this) {
+      ;(window as any)[GLOBAL_KEY] = null
+    }
     this.readyCallbacks = []
     this.isReady = false
-    this.handledRequestIds.clear()
   }
 }
 

@@ -3,7 +3,10 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerAllHandlers } from './ipc-handlers'
 import { setTokenChangedCallback, initAuth } from './auth'
+import { setTasksChangedCallback } from './task-cache'
+import { getChatConfig, setChatMode } from './chat-config'
 import { IPC_CHANNELS } from '../shared/ipc-channels'
+import type { ChatMode } from '../shared/types'
 
 let bubbleWindow: BrowserWindow | null = null
 let appWindow: BrowserWindow | null = null
@@ -36,7 +39,9 @@ function createBubbleWindow(): void {
   bubbleWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 
   bubbleWindow.on('ready-to-show', () => {
-    bubbleWindow?.show()
+    if (getChatConfig().chatMode === 'bubble') {
+      bubbleWindow?.show()
+    }
   })
 
   bubbleWindow.webContents.setWindowOpenHandler((details) => {
@@ -72,16 +77,16 @@ function createBubbleWindow(): void {
 function createAppWindow(): void {
   if (appWindow && !appWindow.isDestroyed()) {
     appWindow.focus()
+    app.focus({ steal: true })
     return
   }
 
   appWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    minWidth: 800,
+    minWidth: 1000,
     minHeight: 600,
     show: false,
-    autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -90,6 +95,7 @@ function createAppWindow(): void {
 
   appWindow.on('ready-to-show', () => {
     appWindow?.show()
+    app.focus({ steal: true })
   })
 
   appWindow.webContents.setWindowOpenHandler((details) => {
@@ -118,7 +124,11 @@ function createTray(): void {
     {
       label: 'Show Bubble',
       click: () => {
-        bubbleWindow?.show()
+        if (getChatConfig().chatMode === 'docked') {
+          createAppWindow()
+        } else {
+          bubbleWindow?.show()
+        }
       }
     },
     {
@@ -140,12 +150,51 @@ function createTray(): void {
   tray.setContextMenu(contextMenu)
 
   tray.on('click', () => {
-    bubbleWindow?.show()
+    if (getChatConfig().chatMode === 'docked') {
+      createAppWindow()
+    } else {
+      bubbleWindow?.show()
+    }
   })
 }
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.flowcore.my-tasks-plan')
+
+  // Set up application menu so macOS shows the correct app name and menus
+  const isMac = process.platform === 'darwin'
+  const menuTemplate: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' as const },
+        { type: 'separator' as const },
+        { role: 'hide' as const },
+        { role: 'hideOthers' as const },
+        { role: 'unhide' as const },
+        { type: 'separator' as const },
+        { role: 'quit' as const },
+      ],
+    }] : []),
+    { role: 'fileMenu' as const },
+    { role: 'editMenu' as const },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' as const },
+        { role: 'forceReload' as const },
+        { role: 'toggleDevTools' as const },
+        { type: 'separator' as const },
+        { role: 'resetZoom' as const },
+        { role: 'zoomIn' as const },
+        { role: 'zoomOut' as const },
+        { type: 'separator' as const },
+        { role: 'togglefullscreen' as const },
+      ],
+    },
+    { role: 'windowMenu' as const },
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate))
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -155,6 +204,11 @@ app.whenReady().then(() => {
 
   createBubbleWindow()
   createTray()
+
+  // If chat mode is docked, auto-open the app window on startup
+  if (getChatConfig().chatMode === 'docked') {
+    createAppWindow()
+  }
 
   // Open app window
   ipcMain.handle(IPC_CHANNELS.CHAT_OPEN_APP, () => {
@@ -174,10 +228,47 @@ app.whenReady().then(() => {
     return { success: true }
   })
 
-  // Restore persisted auth session
-  initAuth().then((restored) => {
-    if (restored) console.log('Auth session restored on startup')
-    else console.log('No auth session to restore')
+  // Get persisted chat mode
+  ipcMain.handle(IPC_CHANNELS.CHAT_GET_MODE, () => {
+    return { success: true, data: getChatConfig().chatMode }
+  })
+
+  // Set chat mode — toggle bubble visibility and broadcast
+  ipcMain.handle(IPC_CHANNELS.CHAT_SET_MODE, (_event, mode: ChatMode) => {
+    setChatMode(mode)
+
+    if (mode === 'docked') {
+      if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+        bubbleWindow.hide()
+      }
+      createAppWindow()
+    } else {
+      if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+        bubbleWindow.show()
+      }
+    }
+
+    // Broadcast to both windows
+    if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+      bubbleWindow.webContents.send(IPC_CHANNELS.CHAT_MODE_CHANGED, mode)
+    }
+    if (appWindow && !appWindow.isDestroyed()) {
+      appWindow.webContents.send(IPC_CHANNELS.CHAT_MODE_CHANGED, mode)
+    }
+
+    return { success: true }
+  })
+
+  // Restore persisted auth session, then run migrations
+  initAuth().then(async (restored) => {
+    if (restored) {
+      console.log('Auth session restored on startup')
+      // Backfill source tag on existing tasks
+      const { migrateSourceTag } = await import('./migrate-source-tag')
+      await migrateSourceTag()
+    } else {
+      console.log('No auth session to restore')
+    }
   })
 
   // Push token changes to all renderer windows
@@ -187,6 +278,17 @@ app.whenReady().then(() => {
     }
     if (appWindow && !appWindow.isDestroyed()) {
       appWindow.webContents.send(IPC_CHANNELS.AUTH_STATUS_CHANGED, token)
+    }
+  })
+
+  // Push task data changes to all renderer windows so both the app and
+  // overlay QueryClients stay in sync after mutations from either window.
+  setTasksChangedCallback(() => {
+    if (bubbleWindow && !bubbleWindow.isDestroyed()) {
+      bubbleWindow.webContents.send(IPC_CHANNELS.TASKS_CHANGED)
+    }
+    if (appWindow && !appWindow.isDestroyed()) {
+      appWindow.webContents.send(IPC_CHANNELS.TASKS_CHANGED)
     }
   })
 

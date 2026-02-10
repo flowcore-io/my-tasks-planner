@@ -38,4 +38,9 @@ export const IPC_CHANNELS = {
   // Chat overlay
   CHAT_OPEN_APP: 'chat:open-app',
   CHAT_SET_IGNORE_MOUSE: 'chat:set-ignore-mouse',
+  CHAT_GET_MODE: 'chat:get-mode',
+  CHAT_SET_MODE: 'chat:set-mode',
+  CHAT_MODE_CHANGED: 'chat:mode-changed',
+  // Cross-window sync
+  TASKS_CHANGED: 'tasks:changed',
 } as const

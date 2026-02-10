@@ -1,9 +1,9 @@
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { getWorkspaceConfig } from '../workspace-config'
-import { fragmentToTask } from '../fragment-serializer'
-import { taskToFragmentPayload } from '../fragment-serializer'
-import { listFragments, getFragment, updateFragment } from '../usable-api'
+import { fragmentToTask, taskToFragmentPayload } from '../fragment-serializer'
+import { updateFragment } from '../usable-api'
+import { getCachedTaskFragments, getCachedFragment, invalidateTaskCache, broadcastTasksChanged } from '../task-cache'
 import type { IpcResponse, GraphData, TaskWithTags } from '../../shared/types'
 
 function hasCycle(
@@ -42,7 +42,9 @@ function hasCycle(
 export function registerDependencyHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.DEPS_LIST, async (_event, taskId: string): Promise<IpcResponse> => {
     try {
-      const fragment = await getFragment(taskId)
+      const config = getWorkspaceConfig()
+      if (!config) return { success: false, error: 'No workspace configured' }
+      const fragment = await getCachedFragment(config.workspaceId, taskId)
       const task = fragmentToTask(fragment)
       return { success: true, data: task.dependencies }
     } catch (error) {
@@ -59,8 +61,8 @@ export function registerDependencyHandlers(): void {
       const config = getWorkspaceConfig()
       if (!config) return { success: false, error: 'No workspace configured' }
 
-      // Fetch all tasks for cycle detection
-      const fragments = await listFragments(config.workspaceId, { tags: ['task'], limit: 200 })
+      // Fetch all tasks for cycle detection (uses cache)
+      const fragments = await getCachedTaskFragments(config.workspaceId)
       const allTasks = fragments.map(fragmentToTask)
 
       const currentTask = allTasks.find(t => t.id === taskId)
@@ -84,6 +86,8 @@ export function registerDependencyHandlers(): void {
       })
       await updateFragment(taskId, payload)
 
+      invalidateTaskCache()
+      broadcastTasksChanged()
       return { success: true, data: { taskId, dependsOnId } }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -92,7 +96,9 @@ export function registerDependencyHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.DEPS_REMOVE, async (_event, taskId: string, dependsOnId: string): Promise<IpcResponse> => {
     try {
-      const fragment = await getFragment(taskId)
+      const config = getWorkspaceConfig()
+      if (!config) return { success: false, error: 'No workspace configured' }
+      const fragment = await getCachedFragment(config.workspaceId, taskId)
       const task = fragmentToTask(fragment)
 
       const newDeps = task.dependencies.filter(d => d !== dependsOnId)
@@ -102,6 +108,8 @@ export function registerDependencyHandlers(): void {
       })
       await updateFragment(taskId, payload)
 
+      invalidateTaskCache()
+      broadcastTasksChanged()
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
@@ -113,7 +121,7 @@ export function registerDependencyHandlers(): void {
       const config = getWorkspaceConfig()
       if (!config) return { success: false, error: 'No workspace configured' }
 
-      const fragments = await listFragments(config.workspaceId, { tags: ['task'], limit: 200 })
+      const fragments = await getCachedTaskFragments(config.workspaceId)
       const nodes = fragments.map(fragmentToTask)
 
       // Build edges from each task's dependencies array

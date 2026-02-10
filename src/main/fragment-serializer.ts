@@ -60,6 +60,7 @@ export function taskToFragmentPayload(task: {
 
   const fragmentTags = [...new Set([
     'task',
+    'source:my-tasks-plan',
     `status:${task.status}`,
     `priority:${task.priority}`,
     ...projectTags,

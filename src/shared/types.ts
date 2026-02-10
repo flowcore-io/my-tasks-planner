@@ -1,6 +1,7 @@
 export type TaskStatus = 'todo' | 'in-progress' | 'done' | 'archived'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type ThemeMode = 'light' | 'dark' | 'system'
+export type ChatMode = 'bubble' | 'docked'
 
 export interface TaskComment {
   id: string
