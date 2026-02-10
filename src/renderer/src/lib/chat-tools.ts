@@ -9,7 +9,7 @@ const inflightCalls = new Map<string, Promise<unknown>>()
 export const PARENT_TOOLS: ParentToolSchema[] = [
   {
     name: 'list_tasks',
-    description: 'List all tasks. Each task includes: id, title, description, status, priority, tags (string[]), projects (string[]), dependencies (id[]), createdAt, updatedAt. Optionally filter by status or priority.',
+    description: 'List all tasks. Each task includes: id, title, description, status, priority, tags (string[]), projects (string[]), dependencies (id[]), startDate?, endDate?, createdAt, updatedAt. Optionally filter by status or priority.',
     parameters: {
       type: 'object',
       properties: {
@@ -39,13 +39,15 @@ export const PARENT_TOOLS: ParentToolSchema[] = [
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'], description: 'Task priority (default: medium)' },
         tags: { type: 'array', items: { type: 'string' }, description: 'User tags (plain strings, e.g. ["frontend", "bug"])' },
         projects: { type: 'array', items: { type: 'string' }, description: 'Project names (e.g. ["website-redesign", "q1-launch"])' },
+        startDate: { type: 'string', description: 'Planned start date (YYYY-MM-DD format)' },
+        endDate: { type: 'string', description: 'Planned end date (YYYY-MM-DD format)' },
       },
       required: ['title'],
     },
   },
   {
     name: 'update_task',
-    description: 'Update an existing task. Only include fields you want to change. Tags and projects replace the full array when provided.',
+    description: 'Update an existing task. Only include fields you want to change. Tags and projects replace the full array when provided. Set startDate/endDate to null to clear.',
     parameters: {
       type: 'object',
       properties: {
@@ -57,6 +59,8 @@ export const PARENT_TOOLS: ParentToolSchema[] = [
         tags: { type: 'array', items: { type: 'string' }, description: 'Replace all user tags' },
         projects: { type: 'array', items: { type: 'string' }, description: 'Replace all project assignments' },
         dependencies: { type: 'array', items: { type: 'string' }, description: 'Replace all dependency task IDs' },
+        startDate: { type: ['string', 'null'], description: 'Planned start date (YYYY-MM-DD) or null to clear' },
+        endDate: { type: ['string', 'null'], description: 'Planned end date (YYYY-MM-DD) or null to clear' },
       },
       required: ['id'],
     },

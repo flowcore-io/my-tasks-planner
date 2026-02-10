@@ -94,6 +94,8 @@ export function registerTaskHandlers(): void {
           tags: data.tags,
           projects: data.projects,
           dependencies: [],
+          startDate: data.startDate,
+          endDate: data.endDate,
         })
 
         const result = await createFragment({
@@ -120,6 +122,8 @@ export function registerTaskHandlers(): void {
           projects: data.projects || [],
           dependencies: [],
           comments: [],
+          startDate: data.startDate,
+          endDate: data.endDate,
         }
 
         return { success: true, data: created }
@@ -162,6 +166,8 @@ export function registerTaskHandlers(): void {
         projects: data.projects ?? current.projects,
         dependencies: data.dependencies ?? current.dependencies,
         comments: data.comments ?? current.comments,
+        startDate: data.startDate === null ? undefined : (data.startDate ?? current.startDate),
+        endDate: data.endDate === null ? undefined : (data.endDate ?? current.endDate),
       }
 
       const payload = taskToFragmentPayload(merged)
@@ -196,6 +202,8 @@ export function registerTaskHandlers(): void {
         projects: current.projects,
         dependencies: current.dependencies,
         comments: current.comments,
+        startDate: current.startDate,
+        endDate: current.endDate,
       })
 
       await updateFragment(id, {
@@ -230,6 +238,8 @@ export function registerTaskHandlers(): void {
           projects: current.projects,
           dependencies: current.dependencies,
           comments: current.comments,
+          startDate: current.startDate,
+          endDate: current.endDate,
         }
 
         const payload = taskToFragmentPayload(merged)
@@ -275,6 +285,8 @@ export function registerTaskHandlers(): void {
         projects: current.projects,
         dependencies: current.dependencies,
         comments: [...current.comments, newComment],
+        startDate: current.startDate,
+        endDate: current.endDate,
       }
 
       const payload = taskToFragmentPayload(merged)

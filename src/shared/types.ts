@@ -25,6 +25,8 @@ export interface TaskWithTags {
   projects: string[]   // project names (extracted from project: tags)
   dependencies: string[] // fragment IDs
   comments: TaskComment[]
+  startDate?: string     // ISO date string (YYYY-MM-DD)
+  endDate?: string       // ISO date string (YYYY-MM-DD)
 }
 
 export interface CreateTaskInput {
@@ -34,6 +36,8 @@ export interface CreateTaskInput {
   priority?: TaskPriority
   tags?: string[]
   projects?: string[]
+  startDate?: string
+  endDate?: string
 }
 
 export interface UpdateTaskInput {
@@ -47,6 +51,8 @@ export interface UpdateTaskInput {
   projects?: string[]
   dependencies?: string[]
   comments?: TaskComment[]
+  startDate?: string | null
+  endDate?: string | null
 }
 
 export interface GraphData {

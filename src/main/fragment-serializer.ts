@@ -22,6 +22,8 @@ export function taskToFragmentPayload(task: {
   projects?: string[]
   dependencies?: string[]
   comments?: TaskComment[]
+  startDate?: string
+  endDate?: string
 }): {
   title: string
   content: string
@@ -40,6 +42,13 @@ export function taskToFragmentPayload(task: {
     `listOrder: ${task.listOrder}`,
     `createdAt: "${task.createdAt}"`,
   ]
+
+  if (task.startDate) {
+    fmLines.push(`startDate: "${task.startDate}"`)
+  }
+  if (task.endDate) {
+    fmLines.push(`endDate: "${task.endDate}"`)
+  }
 
   if (dependencies.length > 0) {
     fmLines.push('dependencies:')
@@ -88,6 +97,8 @@ export function fragmentToTask(fragment: UsableFragment): TaskWithTags {
   const listOrder = typeof frontmatter.listOrder === 'number' ? frontmatter.listOrder : 0
   const createdAt = (frontmatter.createdAt as string) || fragment.updatedAt || new Date().toISOString()
   const dependencies = Array.isArray(frontmatter.dependencies) ? frontmatter.dependencies as string[] : []
+  const startDate = typeof frontmatter.startDate === 'string' ? frontmatter.startDate : undefined
+  const endDate = typeof frontmatter.endDate === 'string' ? frontmatter.endDate : undefined
 
   // Filter tags: only keep simple user tags (no colon-prefixed system tags), deduplicated
   const allTags = fragment.tags || []
@@ -114,6 +125,8 @@ export function fragmentToTask(fragment: UsableFragment): TaskWithTags {
     projects,
     dependencies,
     comments: extractComments(fragment.content || ''),
+    startDate,
+    endDate,
   }
 }
 

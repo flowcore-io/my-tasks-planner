@@ -25,6 +25,8 @@ export function TaskForm({ open, onClose, task }: TaskFormProps) {
   const [tagInput, setTagInput] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [taskProjects, setTaskProjects] = useState<string[]>([])
   const [projectInput, setProjectInput] = useState('')
   const [showProjectSuggestions, setShowProjectSuggestions] = useState(false)
@@ -44,6 +46,8 @@ export function TaskForm({ open, onClose, task }: TaskFormProps) {
       setDescription(task?.description || '')
       setStatus(task?.status || 'todo')
       setPriority(task?.priority || 'medium')
+      setStartDate(task?.startDate || '')
+      setEndDate(task?.endDate || '')
       setTaskTags(task?.tags || [])
       setTaskProjects(task?.projects || [])
       setTagInput('')
@@ -63,7 +67,12 @@ export function TaskForm({ open, onClose, task }: TaskFormProps) {
       if (task) {
         await updateTask.mutateAsync({
           id: task.id,
-          data: { title, description, status: status as any, priority: priority as any, tags: taskTags, projects: taskProjects },
+          data: {
+            title, description, status: status as any, priority: priority as any,
+            tags: taskTags, projects: taskProjects,
+            startDate: startDate || null,
+            endDate: endDate || null,
+          },
         })
         toast({ title: 'Task updated', variant: 'success' })
       } else {
@@ -74,6 +83,8 @@ export function TaskForm({ open, onClose, task }: TaskFormProps) {
           priority: priority as any,
           tags: taskTags,
           projects: taskProjects,
+          ...(startDate ? { startDate } : {}),
+          ...(endDate ? { endDate } : {}),
         })
         toast({ title: 'Task created', variant: 'success' })
       }
@@ -242,6 +253,28 @@ export function TaskForm({ open, onClose, task }: TaskFormProps) {
               { value: 'urgent', label: 'Urgent' },
             ]}
           />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Start Date</label>
+            <input
+              id="startDate"
+              type="date"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 focus:border-primary-500 dark:focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-colors text-sm"
+            />
+          </div>
+          <div>
+            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">End Date</label>
+            <input
+              id="endDate"
+              type="date"
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 focus:border-primary-500 dark:focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20 focus:outline-none transition-colors text-sm"
+            />
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Tags</label>

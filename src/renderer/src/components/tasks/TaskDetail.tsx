@@ -7,9 +7,9 @@ import { useGraph, useAddDependency, useRemoveDependency, useAddBlock, useRemove
 import { useTasks } from '@/hooks/use-tasks'
 import { useWorkspaceConfig } from '@/hooks/use-usable'
 import { useProjects } from '@/hooks/use-projects'
-import { formatDate, STATUS_LABELS } from '@/lib/utils'
+import { formatDate, formatShortDate, getScheduleHealth, STATUS_LABELS } from '@/lib/utils'
 import { useState, useRef, useEffect } from 'react'
-import { ExternalLink, Loader2, Search, X, FolderOpen, MessageSquare, Send } from 'lucide-react'
+import { ExternalLink, Loader2, Search, X, FolderOpen, MessageSquare, Send, Calendar, AlertTriangle, Clock } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -382,6 +382,14 @@ export function TaskDetail({ task: taskProp, open, onClose }: TaskDetailProps) {
           )}
         </div>
 
+        {/* Schedule */}
+        <ScheduleSection task={task} onUpdate={(data) => {
+          updateTask.mutate(
+            { id: task.id, data },
+            { onError: () => toast({ title: 'Failed to update dates', variant: 'error' }) }
+          )
+        }} />
+
         <div className="border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 focus-within:border-primary-500 dark:focus-within:border-primary-400 transition-colors">
           <EditorContent editor={editor} />
         </div>
@@ -584,6 +592,102 @@ export function TaskDetail({ task: taskProp, open, onClose }: TaskDetailProps) {
         </div>
       </div>
     </Dialog>
+  )
+}
+
+/* ── Schedule section ── */
+
+const HEALTH_STYLES: Record<string, { color: string; icon: typeof AlertTriangle | null; label: string }> = {
+  'overdue': { color: 'text-red-500', icon: AlertTriangle, label: 'Overdue' },
+  'at-risk': { color: 'text-amber-500', icon: Clock, label: 'At risk' },
+  'on-track': { color: 'text-green-500', icon: null, label: 'On track' },
+  'done': { color: 'text-green-500', icon: null, label: 'Done' },
+  'no-deadline': { color: 'text-gray-400', icon: null, label: '' },
+}
+
+function ScheduleSection({ task, onUpdate }: { task: TaskWithTags; onUpdate: (data: { startDate?: string | null; endDate?: string | null }) => void }) {
+  const [editingStart, setEditingStart] = useState(false)
+  const [editingEnd, setEditingEnd] = useState(false)
+  const startRef = useRef<HTMLInputElement>(null)
+  const endRef = useRef<HTMLInputElement>(null)
+
+  const health = getScheduleHealth(task)
+  const healthStyle = HEALTH_STYLES[health]
+
+  useEffect(() => {
+    if (editingStart) startRef.current?.focus()
+  }, [editingStart])
+  useEffect(() => {
+    if (editingEnd) endRef.current?.focus()
+  }, [editingEnd])
+
+  const handleStartBlur = (value: string) => {
+    setEditingStart(false)
+    const newVal = value || null
+    if (newVal !== (task.startDate ?? null)) {
+      onUpdate({ startDate: newVal })
+    }
+  }
+
+  const handleEndBlur = (value: string) => {
+    setEditingEnd(false)
+    const newVal = value || null
+    if (newVal !== (task.endDate ?? null)) {
+      onUpdate({ endDate: newVal })
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      <Calendar size={14} className="text-gray-400 shrink-0" />
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-gray-500 dark:text-gray-400">Start:</span>
+        {editingStart ? (
+          <input
+            ref={startRef}
+            type="date"
+            defaultValue={task.startDate || ''}
+            onBlur={e => handleStartBlur(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+            className="text-xs px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 outline-none focus:border-primary-500"
+          />
+        ) : (
+          <button
+            onClick={() => setEditingStart(true)}
+            className="text-xs px-1.5 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+          >
+            {task.startDate ? formatShortDate(task.startDate) : 'None'}
+          </button>
+        )}
+      </div>
+      <span className="text-gray-300 dark:text-gray-600">-</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-gray-500 dark:text-gray-400">End:</span>
+        {editingEnd ? (
+          <input
+            ref={endRef}
+            type="date"
+            defaultValue={task.endDate || ''}
+            onBlur={e => handleEndBlur(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+            className="text-xs px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 outline-none focus:border-primary-500"
+          />
+        ) : (
+          <button
+            onClick={() => setEditingEnd(true)}
+            className="text-xs px-1.5 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+          >
+            {task.endDate ? formatShortDate(task.endDate) : 'None'}
+          </button>
+        )}
+      </div>
+      {health !== 'no-deadline' && health !== 'done' && healthStyle.icon && (
+        <span className={`flex items-center gap-1 text-xs ${healthStyle.color}`}>
+          <healthStyle.icon size={12} />
+          {healthStyle.label}
+        </span>
+      )}
+    </div>
   )
 }
 
