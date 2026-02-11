@@ -51,6 +51,17 @@ bun run build
 bun run preview
 ```
 
+### Package as Executable
+
+```bash
+# Build and package for your platform
+bun run dist --mac      # macOS (.dmg)
+bun run dist --win      # Windows (.exe)
+bun run dist --linux    # Linux (.AppImage, .deb)
+```
+
+The packaged application will be output to the `dist/` directory.
+
 ## Configuration
 
 On first launch, log in and select a Usable workspace in the Settings modal. The AI chat embed is preconfigured and works out of the box.
