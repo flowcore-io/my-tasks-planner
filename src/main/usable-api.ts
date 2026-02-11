@@ -195,6 +195,21 @@ export async function getFragment(fragmentId: string): Promise<UsableFragment> {
   return result.fragment
 }
 
+/** GET /api/workspaces/{id}/members -> { members } */
+export async function listWorkspaceMembers(workspaceId: string): Promise<{ id: string; userId: string; name: string; email: string; role: string }[]> {
+  const result = await usableRequest<{ members: { id: string; userId: string; user?: { name?: string; email?: string }; role?: string; name?: string; email?: string }[] }>(
+    'GET',
+    `/api/workspaces/${workspaceId}/members`
+  )
+  return (result.members || []).map(m => ({
+    id: m.id,
+    userId: m.userId,
+    name: m.user?.name || m.name || 'Unknown',
+    email: m.user?.email || m.email || '',
+    role: m.role || 'member',
+  }))
+}
+
 /** Check if connected to Usable API by listing workspaces */
 export async function checkConnection(): Promise<boolean> {
   try {

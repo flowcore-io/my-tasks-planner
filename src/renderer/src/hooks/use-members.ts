@@ -11,6 +11,8 @@ export function useMembers() {
     },
     staleTime: 300_000,
     refetchOnWindowFocus: true,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10_000),
   })
 }
 

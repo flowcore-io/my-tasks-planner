@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from '../../shared/ipc-channels'
 import { listWorkspaces, getFragmentTypes, checkConnection } from '../usable-api'
 import { getWorkspaceConfig, setWorkspaceConfig, clearWorkspaceConfig } from '../workspace-config'
 import { getCachedMembers } from '../member-cache'
+import { isAuthenticated } from '../auth'
 import type { IpcResponse, WorkspaceConfig } from '../../shared/types'
 
 export function registerUsableHandlers(): void {
@@ -58,6 +59,7 @@ export function registerUsableHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.USABLE_LIST_MEMBERS, async (): Promise<IpcResponse> => {
     try {
+      if (!isAuthenticated()) return { success: false, error: 'Not authenticated' }
       const config = getWorkspaceConfig()
       if (!config) return { success: false, error: 'No workspace configured' }
       const members = await getCachedMembers(config.workspaceId)

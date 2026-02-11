@@ -1,3 +1,4 @@
+import { listWorkspaceMembers } from './usable-api'
 import { getCachedTaskFragments } from './task-cache'
 import { fragmentToTask } from './fragment-serializer'
 import { getTokenClaims } from './auth'
@@ -16,13 +17,8 @@ let cacheTimestamp = 0
 const CACHE_TTL = 300_000 // 5 minutes
 
 /**
- * Build a member list from task assignees, comment authors, and the current user.
- *
- * The Usable `/api/workspaces/{id}/members` endpoint only supports SessionAuth
- * (cookie-based), not BearerAuth (token). Since this app authenticates via
- * Keycloak OIDC tokens, that endpoint will always return 401. Instead we derive
- * the member list from data we already have: the JWT claims for the current
- * user, plus any assigneeIds and comment authors found in task fragments.
+ * Fallback: build a member list from task assignees, comment authors,
+ * and the current user's JWT claims.
  */
 async function buildMembersFromTasks(workspaceId: string): Promise<MemberInfo[]> {
   const seen = new Map<string, MemberInfo>()
@@ -74,7 +70,7 @@ async function buildMembersFromTasks(workspaceId: string): Promise<MemberInfo[]>
 
 /**
  * Get workspace members, using cache when available.
- * Builds from task data + JWT claims (members API requires SessionAuth which we don't have).
+ * Tries the API first, falls back to building from task data.
  */
 export async function getCachedMembers(workspaceId: string): Promise<MemberInfo[]> {
   const now = Date.now()
@@ -82,7 +78,13 @@ export async function getCachedMembers(workspaceId: string): Promise<MemberInfo[
     return cachedMembers
   }
 
-  const members = await buildMembersFromTasks(workspaceId)
+  let members: MemberInfo[]
+  try {
+    members = await listWorkspaceMembers(workspaceId)
+  } catch {
+    // API unavailable — fall back to task data
+    members = await buildMembersFromTasks(workspaceId)
+  }
 
   cachedMembers = members
   cachedWorkspaceId = workspaceId
