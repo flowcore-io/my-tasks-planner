@@ -89,7 +89,7 @@ To create a custom AI expert that powers the embedded chat:
 ### Via the Usable UI
 
 1. **Navigate to Experts**
-   - Go to [Usable Chat](https://chat.usable.ai) and log in
+   - Go to [Usable Chat](https://chat.usable.dev) and log in
    - Navigate to `/settings/experts` or access from the settings menu
 
 2. **Create a New Expert**
