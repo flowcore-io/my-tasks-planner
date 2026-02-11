@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen } from 'electron'
+import { app, shell, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, session } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerAllHandlers } from './ipc-handlers'
@@ -171,6 +171,21 @@ function createTray(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.flowcore.my-tasks-plan')
+
+  // Strip frame-ancestors CSP from chat embed responses so the iframe loads
+  // in production builds where the host page is served from file://.
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const headers = details.responseHeaders || {}
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() === 'content-security-policy') {
+        headers[key] = headers[key]!.map(v =>
+          v.replace(/frame-ancestors\s+[^;]+(;|$)/gi, '').trim()
+        ).filter(Boolean)
+        if (headers[key]!.length === 0) delete headers[key]
+      }
+    }
+    callback({ responseHeaders: headers })
+  })
 
   // Set dock icon on macOS and keep it visible at all times.
   // macOS auto-hides the dock icon when no "normal" windows exist — the bubble
