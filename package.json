@@ -7,7 +7,10 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "dist": "electron-vite build && electron-builder --config electron-builder.config.cjs"
+    "dist": "electron-vite build && electron-builder --config electron-builder.config.cjs",
+    "dist:mac": "electron-vite build && electron-builder --config electron-builder.config.cjs --mac",
+    "dist:win": "electron-vite build && electron-builder --config electron-builder.config.cjs --win",
+    "dist:all": "electron-vite build && electron-builder --config electron-builder.config.cjs --mac --win"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",

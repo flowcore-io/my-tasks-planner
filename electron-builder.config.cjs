@@ -35,6 +35,20 @@ module.exports = {
       }
     ]
   },
+  win: {
+    icon: 'resources/icon.png',
+    target: [
+      {
+        target: 'nsis',
+        arch: ['x64']
+      }
+    ]
+  },
+  nsis: {
+    oneClick: true,
+    perMachine: false,
+    allowToChangeInstallationDirectory: false
+  },
   npmRebuild: true,
   publish: {
     provider: 'generic',
