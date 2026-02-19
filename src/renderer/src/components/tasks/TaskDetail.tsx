@@ -9,13 +9,16 @@ import { useWorkspaceConfig } from '@/hooks/use-usable'
 import { useProjects } from '@/hooks/use-projects'
 import { useMembers, resolveMemberName } from '@/hooks/use-members'
 import { formatDate, formatShortDate, getScheduleHealth, STATUS_LABELS } from '@/lib/utils'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { ExternalLink, Loader2, Search, X, FolderOpen, MessageSquare, Send, Calendar, AlertTriangle, Clock, User } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
+import { marked } from 'marked'
 import type { TaskWithTags } from '../../../../shared/types'
+
+marked.setOptions({ gfm: true, breaks: true })
 
 interface TaskDetailProps {
   task: TaskWithTags | null
@@ -54,6 +57,9 @@ export function TaskDetail({ task: taskProp, open, onClose }: TaskDetailProps) {
   const allProjects = useProjects()
   const { data: members } = useMembers()
 
+  // Description view/edit toggle
+  const [editingDescription, setEditingDescription] = useState(false)
+
   // Inline title editing
   const [title, setTitle] = useState('')
   const titleRef = useRef<HTMLInputElement>(null)
@@ -84,19 +90,29 @@ export function TaskDetail({ task: taskProp, open, onClose }: TaskDetailProps) {
           { onError: () => toast({ title: 'Failed to update description', variant: 'error' }) }
         )
       }
+      setEditingDescription(false)
     },
   })
 
-  // Sync editor content when task changes
+  // Reset editing state when switching tasks
   useEffect(() => {
-    if (!editor || !task) return
-    const current = editor.getHTML()
-    const taskDesc = task.description || ''
-    // Only reset if the content actually differs (avoid cursor jump)
-    if (current !== taskDesc && !(current === '<p></p>' && taskDesc === '')) {
-      editor.commands.setContent(taskDesc || '')
-    }
-  }, [task?.id, task?.description, editor])
+    setEditingDescription(false)
+  }, [task?.id])
+
+  // When entering edit mode, load current description into TipTap
+  useEffect(() => {
+    if (!editingDescription || !editor || !task) return
+    const desc = task.description || ''
+    const html = desc ? (marked.parse(desc) as string) : ''
+    editor.commands.setContent(html)
+    editor.commands.focus('end')
+  }, [editingDescription])
+
+  // Rendered markdown HTML for view mode
+  const renderedDescription = useMemo(() => {
+    if (!task?.description) return ''
+    return marked.parse(task.description) as string
+  }, [task?.description])
 
   if (!task) return null
 
@@ -410,9 +426,25 @@ export function TaskDetail({ task: taskProp, open, onClose }: TaskDetailProps) {
           )
         }} />
 
-        <div className="border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 focus-within:border-primary-500 dark:focus-within:border-primary-400 transition-colors">
-          <EditorContent editor={editor} />
-        </div>
+        {editingDescription ? (
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 focus-within:border-primary-500 dark:focus-within:border-primary-400 transition-colors">
+            <EditorContent editor={editor} />
+          </div>
+        ) : (
+          <div
+            onClick={() => setEditingDescription(true)}
+            className="border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 cursor-text hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
+          >
+            {renderedDescription ? (
+              <div
+                className="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300"
+                dangerouslySetInnerHTML={{ __html: renderedDescription }}
+              />
+            ) : (
+              <p className="text-sm text-gray-400 dark:text-gray-500 min-h-[80px]">Add a description...</p>
+            )}
+          </div>
+        )}
 
         {/* Comments */}
         <div>

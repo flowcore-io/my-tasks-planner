@@ -93,6 +93,27 @@ export async function getCachedMembers(workspaceId: string): Promise<MemberInfo[
 }
 
 /**
+ * Resolve an assignee value that may be an email or name to a userId.
+ * Returns the original value unchanged if it's already a userId (UUID)
+ * or if no matching member is found.
+ */
+export async function resolveAssigneeId(workspaceId: string, value: string): Promise<string> {
+  const members = await getCachedMembers(workspaceId)
+  const lower = value.toLowerCase()
+
+  // Check email match
+  const byEmail = members.find(m => m.email.toLowerCase() === lower)
+  if (byEmail) return byEmail.userId
+
+  // Check name match (case-insensitive)
+  const byName = members.find(m => m.name.toLowerCase() === lower)
+  if (byName) return byName.userId
+
+  // Already a userId or no match found — return as-is
+  return value
+}
+
+/**
  * Invalidate the member cache.
  */
 export function invalidateMemberCache(): void {

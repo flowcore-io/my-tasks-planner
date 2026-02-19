@@ -29,7 +29,7 @@ export const PARENT_TOOLS: ParentToolSchema[] = [
   },
   {
     name: 'create_task',
-    description: 'Create a new task. Tags and projects are plain string arrays stored on the task directly. Use list_members to get valid userId values for assigneeId.',
+    description: 'Create a new task. Tags and projects are plain string arrays stored on the task directly. assigneeId accepts a userId, email address, or member name — it will be resolved automatically.',
     parameters: {
       type: 'object',
       properties: {
@@ -41,7 +41,7 @@ export const PARENT_TOOLS: ParentToolSchema[] = [
         projects: { type: 'array', items: { type: 'string' }, description: 'Project names (e.g. ["website-redesign", "q1-launch"])' },
         startDate: { type: 'string', description: 'Planned start date (YYYY-MM-DD format)' },
         endDate: { type: 'string', description: 'Planned end date (YYYY-MM-DD format)' },
-        assigneeId: { type: 'string', description: 'userId of the workspace member to assign (from list_members)' },
+        assigneeId: { type: 'string', description: 'Assign to a member by userId, email, or name' },
       },
       required: ['title'],
     },
@@ -62,7 +62,7 @@ export const PARENT_TOOLS: ParentToolSchema[] = [
         dependencies: { type: 'array', items: { type: 'string' }, description: 'Replace all dependency task IDs' },
         startDate: { type: ['string', 'null'], description: 'Planned start date (YYYY-MM-DD) or null to clear' },
         endDate: { type: ['string', 'null'], description: 'Planned end date (YYYY-MM-DD) or null to clear' },
-        assigneeId: { type: ['string', 'null'], description: 'userId of assignee or null to clear' },
+        assigneeId: { type: ['string', 'null'], description: 'Assign by userId, email, or name — or null to clear' },
       },
       required: ['id'],
     },

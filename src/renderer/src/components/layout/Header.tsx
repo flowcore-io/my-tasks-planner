@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Select } from '@/components/ui/Select'
-import { Plus, ChevronDown, X, FolderOpen, Users } from 'lucide-react'
+import { Plus, ChevronDown, X, FolderOpen, Users, RefreshCw } from 'lucide-react'
 import type { WorkspaceMember } from '../../../../shared/types'
 
 interface HeaderProps {
+  onRefresh: () => void
   onNewTask: () => void
   statusFilter: string
   onStatusFilterChange: (v: string) => void
@@ -21,6 +22,7 @@ interface HeaderProps {
 }
 
 export function Header({
+  onRefresh,
   onNewTask,
   statusFilter,
   onStatusFilterChange,
@@ -240,9 +242,18 @@ export function Header({
           </div>
         )}
       </div>
-      <Button onClick={onNewTask} className="gap-1.5">
-        <Plus size={16} /> New Task
-      </Button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onRefresh}
+          className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          title="Refresh"
+        >
+          <RefreshCw size={16} />
+        </button>
+        <Button onClick={onNewTask} className="gap-1.5">
+          <Plus size={16} /> New Task
+        </Button>
+      </div>
     </header>
   )
 }

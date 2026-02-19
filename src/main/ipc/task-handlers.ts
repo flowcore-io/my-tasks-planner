@@ -6,6 +6,7 @@ import { taskToFragmentPayload, fragmentToTask } from '../fragment-serializer'
 import { createFragment, updateFragment, countFragments } from '../usable-api'
 import { getCachedTaskFragments, getCachedFragment, invalidateTaskCache, broadcastTasksChanged } from '../task-cache'
 import { getTokenClaims } from '../auth'
+import { resolveAssigneeId } from '../member-cache'
 import type { IpcResponse, TaskWithTags, CreateTaskInput, UpdateTaskInput } from '../../shared/types'
 
 // Promise-based dedup guard for task creation — prevents duplicate creates from race conditions.
@@ -83,6 +84,11 @@ export function registerTaskHandlers(): void {
         // Get current task count for ordering
         const order = await countFragments(config.workspaceId, { tags: ['source:my-tasks-plan'] })
 
+        // Resolve email/name to userId if needed
+        const assigneeId = data.assigneeId
+          ? await resolveAssigneeId(config.workspaceId, data.assigneeId)
+          : undefined
+
         const payload = taskToFragmentPayload({
           title: data.title,
           description: data.description,
@@ -96,7 +102,7 @@ export function registerTaskHandlers(): void {
           dependencies: [],
           startDate: data.startDate,
           endDate: data.endDate,
-          assigneeId: data.assigneeId,
+          assigneeId,
         })
 
         const result = await createFragment({
@@ -125,7 +131,7 @@ export function registerTaskHandlers(): void {
           comments: [],
           startDate: data.startDate,
           endDate: data.endDate,
-          assigneeId: data.assigneeId,
+          assigneeId,
         }
 
         return { success: true, data: created }
@@ -155,6 +161,13 @@ export function registerTaskHandlers(): void {
       const fragment = await getCachedFragment(config.workspaceId, id)
       const current = fragmentToTask(fragment)
 
+      // Resolve email/name to userId if needed
+      const resolvedAssigneeId = data.assigneeId === null
+        ? undefined
+        : data.assigneeId
+          ? await resolveAssigneeId(config.workspaceId, data.assigneeId)
+          : current.assigneeId
+
       // Merge updates
       const merged = {
         title: data.title ?? current.title,
@@ -170,7 +183,7 @@ export function registerTaskHandlers(): void {
         comments: data.comments ?? current.comments,
         startDate: data.startDate === null ? undefined : (data.startDate ?? current.startDate),
         endDate: data.endDate === null ? undefined : (data.endDate ?? current.endDate),
-        assigneeId: data.assigneeId === null ? undefined : (data.assigneeId ?? current.assigneeId),
+        assigneeId: resolvedAssigneeId,
       }
 
       const payload = taskToFragmentPayload(merged)

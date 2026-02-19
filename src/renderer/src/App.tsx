@@ -74,6 +74,14 @@ export default function App() {
   }, [])
   const clearAssignees = useCallback(() => setSelectedAssignees([]), [])
 
+  const handleRefresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['tasks'] })
+    qc.invalidateQueries({ queryKey: ['task'] })
+    qc.invalidateQueries({ queryKey: ['graph'] })
+    qc.invalidateQueries({ queryKey: ['tags'] })
+    qc.invalidateQueries({ queryKey: ['members'] })
+  }, [qc])
+
   // Auto-open docked panel when switching to docked mode
   useEffect(() => {
     if (chatMode === 'docked') {
@@ -205,6 +213,7 @@ export default function App() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header
+          onRefresh={handleRefresh}
           onNewTask={() => setShowTaskForm(true)}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
