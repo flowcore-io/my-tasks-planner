@@ -3,7 +3,7 @@ import { listFragments, getFragment, type UsableFragment } from './usable-api'
 let cachedFragments: Map<string, UsableFragment> | null = null
 let cachedWorkspaceId: string | null = null
 let cacheTimestamp = 0
-const CACHE_TTL = 120_000 // 2 minutes
+const CACHE_TTL = 10_000 // 10 seconds — aligned with renderer polling interval
 
 // Callback for notifying all renderer windows about task data changes.
 // Set by index.ts which has access to the BrowserWindow references.

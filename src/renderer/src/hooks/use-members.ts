@@ -9,7 +9,8 @@ export function useMembers() {
       if (!res.success) throw new Error(res.error)
       return res.data as WorkspaceMember[]
     },
-    staleTime: 300_000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
     refetchOnWindowFocus: true,
     retry: 3,
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10_000),

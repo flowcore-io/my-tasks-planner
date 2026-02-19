@@ -8,7 +8,8 @@ export function useTags() {
       if (!res.success) throw new Error(res.error)
       return res.data as string[]
     },
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
   })
 }
 

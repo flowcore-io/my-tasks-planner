@@ -9,7 +9,8 @@ export function useGraph() {
       if (!res.success) throw new Error(res.error)
       return res.data as GraphData
     },
-    staleTime: 300_000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
   })
 }
 

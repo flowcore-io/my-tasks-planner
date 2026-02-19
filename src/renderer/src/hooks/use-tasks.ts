@@ -9,7 +9,8 @@ export function useTasks(filters?: { status?: string; priority?: string; tag?: s
       if (!res.success) throw new Error(res.error)
       return res.data as TaskWithTags[]
     },
-    staleTime: 300_000,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
     refetchOnWindowFocus: true,
   })
 }
@@ -24,7 +25,8 @@ export function useTask(id: string | null) {
       return res.data as TaskWithTags
     },
     enabled: !!id,
-    staleTime: 300_000,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
   })
 }
 
