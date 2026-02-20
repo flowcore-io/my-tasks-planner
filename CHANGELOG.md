@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/flowcore-io/my-tasks-planner/compare/my-tasks-plan-v1.1.0...my-tasks-plan-v1.1.1) (2026-02-20)
+
+
+### Bug Fixes
+
+* add linux deb maintainer and category for electron-builder ([7680a78](https://github.com/flowcore-io/my-tasks-planner/commit/7680a78ef88a46e5badc8c98132b987e659f0e2e))
+
 ## [1.1.0](https://github.com/flowcore-io/my-tasks-planner/compare/my-tasks-plan-v1.0.0...my-tasks-plan-v1.1.0) (2026-02-20)
 
 
