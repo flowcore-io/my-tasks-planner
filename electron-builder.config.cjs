@@ -35,6 +35,8 @@ module.exports = {
   },
   linux: {
     icon: 'resources/icon.png',
+    maintainer: 'Flowcore <support@flowcore.io>',
+    category: 'Office',
     target: [
       { target: 'AppImage', arch: ['x64'] },
       { target: 'deb', arch: ['x64'] }
