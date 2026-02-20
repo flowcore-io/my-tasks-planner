@@ -1,6 +1,6 @@
 {
   "name": "my-tasks-plan",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Desktop Task Manager with Electron",
   "main": "./out/main/index.js",
   "scripts": {
