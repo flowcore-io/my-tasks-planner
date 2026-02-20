@@ -56,9 +56,9 @@ export function Header({
   }, [])
 
   return (
-    <header className="h-14 px-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-900">
-      <div className="flex items-center gap-3">
-        <div className="w-36">
+    <header className="h-14 px-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3 bg-white dark:bg-gray-900">
+      <div className="flex-1 flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-hide">
+        <div className="shrink-0">
           <Select
             value={statusFilter}
             onChange={e => onStatusFilterChange(e.target.value)}
@@ -71,7 +71,7 @@ export function Header({
             ]}
           />
         </div>
-        <div className="w-36">
+        <div className="shrink-0">
           <Select
             value={priorityFilter}
             onChange={e => onPriorityFilterChange(e.target.value)}
@@ -86,10 +86,10 @@ export function Header({
         </div>
 
         {/* Project filter dropdown */}
-        <div ref={dropdownRef} className="relative">
+        <div ref={dropdownRef} className="relative shrink-0">
           <button
             onClick={() => setProjectDropdownOpen(!projectDropdownOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
           >
             <FolderOpen size={14} className="text-gray-400" />
             {selectedProjects.length === 0 ? (
@@ -163,10 +163,10 @@ export function Header({
         )}
 
         {/* Assignee filter dropdown */}
-        <div ref={assigneeDropdownRef} className="relative">
+        <div ref={assigneeDropdownRef} className="relative shrink-0">
           <button
             onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
           >
             <Users size={14} className="text-gray-400" />
             {selectedAssignees.length === 0 ? (
@@ -242,7 +242,7 @@ export function Header({
           </div>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0 ml-auto">
         <button
           onClick={onRefresh}
           className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -250,7 +250,7 @@ export function Header({
         >
           <RefreshCw size={16} />
         </button>
-        <Button onClick={onNewTask} className="gap-1.5">
+        <Button onClick={onNewTask} className="gap-1.5 whitespace-nowrap">
           <Plus size={16} /> New Task
         </Button>
       </div>
