@@ -20,10 +20,8 @@ module.exports = {
     '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}',
     '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   ],
-  asarUnpack: ['node_modules/better-sqlite3/**'],
   mac: {
     icon: 'resources/icon.icns',
-    entitlementsInherit: 'build/entitlements.mac.plist',
     extendInfo: [
       'NSDocumentsFolderUsageDescription: Application needs access for task data.'
     ],
@@ -35,9 +33,24 @@ module.exports = {
       }
     ]
   },
+  linux: {
+    icon: 'resources/icon.png',
+    target: [
+      { target: 'AppImage', arch: ['x64'] },
+      { target: 'deb', arch: ['x64'] }
+    ]
+  },
+  win: {
+    icon: 'resources/icon.png',
+    target: [
+      { target: 'nsis', arch: ['x64'] }
+    ]
+  },
+  nsis: {
+    oneClick: true
+  },
   npmRebuild: true,
   publish: {
-    provider: 'generic',
-    url: ''
+    provider: 'github'
   }
 }
